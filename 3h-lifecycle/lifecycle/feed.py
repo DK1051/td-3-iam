@@ -94,8 +94,10 @@ class _Row:
         value = self.values[column].strip()
         if value == "":
             raise self.error(column, "must not be empty")
-        if any(unicodedata.category(char) == "Cc" for char in value):
-            raise self.error(column, "must not contain a control character (tab, line break, ...)")
+        # Cc = control characters (tab, line break, ...); Cf = invisible format characters such as
+        # the right-to-left override, which can make a name display differently from what it is.
+        if any(unicodedata.category(char) in ("Cc", "Cf") for char in value):
+            raise self.error(column, "must not contain a control or invisible formatting character")
         return value
 
     def identifier(self, column: str) -> str:

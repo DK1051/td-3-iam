@@ -44,8 +44,10 @@ Rules that came out of design decisions:
   or `left <date>`. This fails safe: better to cut access early than late.
 - A service account whose expiry date has passed is created **disabled**, or switched to disabled if it was
   enabled. The plan shows `expired on <date>`. The engine **never switches a disabled service account back
-  on**, even if the owner later extends the expiry date or the date is still in the future: the plan says
-  `SKIPPED disabled by an admin <client id>` and a person enables it by hand.
+  on**, even if the owner extends the expiry date or the date is still in the future: it may have been disabled
+  by an administrator or by this engine at expiry, so turning it on again is a person's decision. The plan says
+  `SKIPPED already disabled <client id> (not re-enabled)`. Owner, purpose and expiry from the CSV are still kept
+  up to date (`update attributes (stays disabled)`).
 - A joiner whose account already exists and is enabled before the start date is disabled until then
   (`disable until start <date>`), with the same marker.
 - A mover whose account is disabled still gets their group changes, so the record stays accurate; the plan line
@@ -129,10 +131,10 @@ $ ruff check .
 All checks passed!
 
 $ pytest -q            # Keycloak unreachable (KC_URL=http://localhost:9): integration tests skipped
-66 passed, 9 skipped in 0.38s
+69 passed, 9 skipped in 0.35s
 
 $ pytest -q -m keycloak
-9 passed, 66 deselected in 62.96s (0:01:02)
+9 passed, 69 deselected in 61.70s (0:01:01)
 ```
 
 A manual run on the sample files: `plan` showed 6 create_user, 3 move_user, 3 disable_user, 4 create_client;

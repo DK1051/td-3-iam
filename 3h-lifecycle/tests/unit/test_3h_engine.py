@@ -371,10 +371,29 @@ def test_a_client_an_admin_disabled_is_never_switched_back_on(feed, accounts, ro
     for _ in range(2):  # and the answer is the same every time
         actions = service_accounts_only(make_plan(fake, feed, accounts, roles_map))
         assert [(a.kind, a.summary) for a in actions] == [
-            ("skipped", "SKIPPED disabled by an admin svc-payments-batch")]
+            ("skipped", "SKIPPED already disabled svc-payments-batch (not re-enabled)")]
         assert engine.apply(actions, fake) == Counter()
     assert len(fake.writes) == writes_before
     assert fake.get_client_by_client_id("svc-payments-batch")["enabled"] is False
+
+
+def test_a_disabled_client_still_gets_attribute_updates_but_stays_disabled(feed, accounts,
+                                                                         roles_map):
+    fake = new_fake(roles_map, with_staff=True)
+    engine.apply(make_plan(fake, feed, accounts, roles_map), fake)
+    client = fake.get_client_by_client_id("svc-payments-batch")
+    fake.clients[client["id"]]["enabled"] = False
+    fake.clients[client["id"]]["attributes"]["owner"] = "E9999"   # CSV says E1001
+    first = service_accounts_only(make_plan(fake, feed, accounts, roles_map))
+    assert [(a.kind, a.summary) for a in first] == [
+        ("update_client", "update attributes (stays disabled) svc-payments-batch"),
+        ("skipped", "SKIPPED already disabled svc-payments-batch (not re-enabled)")]
+    assert engine.apply(first, fake) == Counter({"update_client": 1})
+    after = fake.get_client_by_client_id("svc-payments-batch")
+    assert after["enabled"] is False and after["attributes"]["owner"] == "E1001"
+    second = service_accounts_only(make_plan(fake, feed, accounts, roles_map))
+    assert [a.kind for a in second] == ["skipped"]          # nothing left to change
+    assert engine.apply(second, fake) == Counter()
 
 
 # ---- idempotency and safety ----------------------------------------------------------------

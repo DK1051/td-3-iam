@@ -310,15 +310,24 @@ def _plan_service_account(account: ServiceAccount, client: dict | None,
                      f"owner {account.owner}"),
             details={"enabled": enabled, "attributes": attributes},
         )]
-    if not client["enabled"] and enabled:
-        # Never switch a disabled client back on: an administrator may have disabled it on
-        # purpose. Turning it on again is a human decision.
-        return [Action(
-            kind=SKIPPED, target=account.client_id,
-            summary=f"SKIPPED disabled by an admin {account.client_id}",
-        )]
     current = client.get("attributes", {})
     changed = {name: value for name, value in attributes.items() if current.get(name) != value}
+    if not client["enabled"] and enabled:
+        # Never switch a disabled client back on: it may have been disabled on purpose (by an
+        # administrator, or by this engine when it expired). Turning it on again is a human
+        # decision. Owner, purpose and expiry from the CSV are still kept up to date.
+        report = Action(
+            kind=SKIPPED, target=account.client_id,
+            summary=f"SKIPPED already disabled {account.client_id} (not re-enabled)",
+        )
+        if not changed:
+            return [report]
+        update = Action(
+            kind=UPDATE_CLIENT, target=account.client_id,
+            summary=f"update attributes (stays disabled) {account.client_id}",
+            details={"client_uuid": client["id"], "enabled": None, "attributes": changed},
+        )
+        return [update, report]
     if client["enabled"] == enabled and not changed:
         return []
     pieces = []
