@@ -63,6 +63,11 @@ def people_only(actions):
     return [a for a in actions if not a.kind.endswith("_client")]
 
 
+def service_accounts_only(actions):
+    """Keep only the actions about service accounts (their targets start with 'svc-')."""
+    return [a for a in actions if a.target.startswith("svc-")]
+
+
 def kinds(actions):
     return Counter(action.kind for action in actions)
 
@@ -176,6 +181,40 @@ def test_joiners_are_enabled_once_their_start_date_has_come_and_then_left_alone(
     assert people_only(make_plan(fake, feed, accounts, roles_map, today=LATER)) == []
     assert engine.apply(people_only(make_plan(fake, feed, accounts, roles_map, today=LATER)),
                         fake) == Counter()
+
+
+def test_joiner_already_enabled_before_the_start_date_is_disabled_until_then(feed, accounts,
+                                                                           roles_map):
+    fake = new_fake(roles_map, with_staff=True)
+    fake.seed_user("e2001", ["finance", "payments-initiate"],
+                   attributes={"employee_id": "E2001", "department": "finance",
+                               "job_title": "Payments Officer", "manager_id": "E1001"})
+    actions = make_plan(fake, feed, accounts, roles_map)
+    first = next(a for a in actions if a.target == "E2001")
+    assert (first.kind, first.summary) == ("disable_user",
+                                           "e2001: disable until start 2026-11-02")
+    engine.apply(actions, fake)
+    user = fake.get_user_by_username("e2001")
+    assert user["enabled"] is False and user["attributes"]["pending_start"] == "2026-11-02"
+    assert [a for a in make_plan(fake, feed, accounts, roles_map) if a.target == "E2001"] == []
+    # ...and on the start date the usual rule enables it.
+    on_the_day = make_plan(fake, feed, accounts, roles_map, today=date(2026, 11, 2))
+    assert [(a.kind, a.target) for a in on_the_day if a.target == "E2001"] == [
+        ("enable_user", "E2001")]
+
+
+def test_a_disabled_mover_still_gets_group_changes_and_the_plan_says_so(feed, accounts,
+                                                                     roles_map):
+    fake = new_fake(roles_map, with_staff=True)
+    fake.users[fake.get_user_by_username("e3001")["id"]]["enabled"] = False
+    actions = make_plan(fake, feed, accounts, roles_map)
+    move = next(a for a in actions if a.target == "E3001")
+    assert move.kind == "move_user" and move.summary.endswith("(account disabled)")
+    other = next(a for a in actions if a.target == "E3002")
+    assert "(account disabled)" not in other.summary
+    engine.apply(actions, fake)
+    assert fake.group_names_of("e3001") == {"finance", "payments-initiate"}
+    assert fake.get_user_by_username("e3001")["enabled"] is False  # still disabled
 
 
 def test_a_joiner_an_administrator_disabled_is_never_switched_back_on(feed, accounts,
@@ -321,6 +360,21 @@ def test_account_that_expires_later_gets_disabled(feed, accounts, roles_map):
     assert fake.get_client_by_client_id("svc-report-export")["enabled"] is False
     assert [a for a in make_plan(fake, feed, accounts, roles_map, today=december)
             if a.kind.endswith("_client")] == []
+
+
+def test_a_client_an_admin_disabled_is_never_switched_back_on(feed, accounts, roles_map):
+    fake = new_fake(roles_map, with_staff=True)
+    engine.apply(make_plan(fake, feed, accounts, roles_map), fake)
+    client = fake.get_client_by_client_id("svc-payments-batch")
+    fake.clients[client["id"]]["enabled"] = False  # an administrator switches it off
+    writes_before = len(fake.writes)
+    for _ in range(2):  # and the answer is the same every time
+        actions = service_accounts_only(make_plan(fake, feed, accounts, roles_map))
+        assert [(a.kind, a.summary) for a in actions] == [
+            ("skipped", "SKIPPED disabled by an admin svc-payments-batch")]
+        assert engine.apply(actions, fake) == Counter()
+    assert len(fake.writes) == writes_before
+    assert fake.get_client_by_client_id("svc-payments-batch")["enabled"] is False
 
 
 # ---- idempotency and safety ----------------------------------------------------------------

@@ -7,8 +7,8 @@ import pytest
 
 from lifecycle.kc import KeycloakClient, KeycloakError
 
-USER_ID = "3f1c9e0a-5b7d-4c2e-9a41-0d6e8b7f2a11"
-TOKEN = "super-secret-token-value"
+USER_ID = "00000000-0000-0000-0000-000000000001"
+TOKEN = "test-token"
 BODY_TEXT = "BODY-WITH-OBJECT-ID-9999"
 
 

@@ -122,7 +122,14 @@ def test_manager_id_and_service_account_ids_are_checked_too(tmp_path):
 
 
 def test_tab_or_line_break_inside_a_field_is_rejected(tmp_path):
-    with pytest.raises(FeedError, match="first_name.*tab or a line break"):
+    with pytest.raises(FeedError, match="first_name.*control character"):
         load_feed(write_feed(tmp_path, GOOD_JOINER.replace(",Test,", ',"Te\tst",')))
-    with pytest.raises(FeedError, match="job_title.*tab or a line break"):
+    with pytest.raises(FeedError, match="job_title.*control character"):
         load_feed(write_feed(tmp_path, GOOD_JOINER.replace("Payments Officer", '"Payments\nOfficer"')))
+
+
+@pytest.mark.parametrize("control", ["\x00", "\x1b", "\x7f"])
+def test_any_control_character_in_a_field_is_rejected(tmp_path, control):
+    bad = GOOD_JOINER.replace(",Test,", f",Te{control}st,")
+    with pytest.raises(FeedError, match="first_name.*control character"):
+        load_feed(write_feed(tmp_path, bad))

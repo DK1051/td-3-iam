@@ -39,11 +39,17 @@ Rules that came out of design decisions:
 - A joiner whose start date is still in the future is created **disabled**, with a marker attribute
   `pending_start=<start date>`. On or after that date, the next run enables the account and removes the marker.
   Only an account carrying the marker is ever enabled by the engine, so an account that an administrator disabled is
-  never switched back on (it is reported as `SKIPPED`).
+  never switched back on (it is reported as `SKIPPED`; this also covers a re-hire, which needs a person to review it).
 - A leaver is disabled **now**, even if their end date is still in the future. The plan says `leaves on <date>`
   or `left <date>`. This fails safe: better to cut access early than late.
-- A service account whose expiry date has passed is created (or kept) **disabled**. The plan shows
-  `expired on <date>`. If the owner extends the date in the CSV, the next run enables it again.
+- A service account whose expiry date has passed is created **disabled**, or switched to disabled if it was
+  enabled. The plan shows `expired on <date>`. The engine **never switches a disabled service account back
+  on**, even if the owner later extends the expiry date or the date is still in the future: the plan says
+  `SKIPPED disabled by an admin <client id>` and a person enables it by hand.
+- A joiner whose account already exists and is enabled before the start date is disabled until then
+  (`disable until start <date>`), with the same marker.
+- A mover whose account is disabled still gets their group changes, so the record stays accurate; the plan line
+  ends with `(account disabled)`. The account stays disabled.
 - A mover or leaver with no account in Keycloak is reported as `SKIPPED unknown user <employee id>` and never
   created by accident.
 - Anyone who gains the `privileged` group (powerful admin access) has `PRIVILEGED` at the end of their plan line.
@@ -123,10 +129,10 @@ $ ruff check .
 All checks passed!
 
 $ pytest -q            # Keycloak unreachable (KC_URL=http://localhost:9): integration tests skipped
-60 passed, 9 skipped in 0.28s
+66 passed, 9 skipped in 0.38s
 
 $ pytest -q -m keycloak
-9 passed, 60 deselected in 60.12s (0:01:00)
+9 passed, 66 deselected in 62.96s (0:01:02)
 ```
 
 A manual run on the sample files: `plan` showed 6 create_user, 3 move_user, 3 disable_user, 4 create_client;

@@ -233,6 +233,13 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
                         "(a re-hire needs a person to review it)",
             ))
             continue
+        if user.enabled and joiner.start_date > today:
+            # Already enabled although the first day is still ahead: switch off until then.
+            actions.append(Action(
+                kind=DISABLE_USER, target=joiner.employee_id,
+                summary=f"{username_for(joiner.employee_id)}: disable until start {starts}",
+                details={"user_id": user.id, "attributes": {PENDING_START: starts}},
+            ))
         extra = None
         if waiting_for_start:
             if joiner.start_date <= today:
@@ -259,6 +266,9 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
             continue
         move = _plan_existing_user(mover, user, wanted_by_person[mover.employee_id], roles_map)
         if move:
+            if not user.enabled:
+                # Groups are still corrected (so the record stays accurate), but say so.
+                move.summary += " (account disabled)"
             actions.append(move)
 
     for leaver in feed.leavers:
@@ -286,7 +296,8 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
 
 def _plan_service_account(account: ServiceAccount, client: dict | None,
                           today: date) -> list[Action]:
-    """An account whose expiry date has passed is kept disabled so it can never log in."""
+    """An account whose expiry date has passed is created or switched to disabled. A client that
+    is already disabled is never switched back on by the engine."""
     expired = account.expires_on < today
     enabled = not expired
     attributes = {"owner": account.owner, "purpose": account.purpose,
@@ -298,6 +309,13 @@ def _plan_service_account(account: ServiceAccount, client: dict | None,
             summary=(f"{account.client_id}: create {'DISABLED, ' if expired else ''}{note}; "
                      f"owner {account.owner}"),
             details={"enabled": enabled, "attributes": attributes},
+        )]
+    if not client["enabled"] and enabled:
+        # Never switch a disabled client back on: an administrator may have disabled it on
+        # purpose. Turning it on again is a human decision.
+        return [Action(
+            kind=SKIPPED, target=account.client_id,
+            summary=f"SKIPPED disabled by an admin {account.client_id}",
         )]
     current = client.get("attributes", {})
     changed = {name: value for name, value in attributes.items() if current.get(name) != value}

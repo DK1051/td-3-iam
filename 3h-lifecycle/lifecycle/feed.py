@@ -7,6 +7,7 @@ names the file, the row and the column, so whoever edits the CSV can find the mi
 
 import csv
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -93,8 +94,8 @@ class _Row:
         value = self.values[column].strip()
         if value == "":
             raise self.error(column, "must not be empty")
-        if any(char in value for char in "\r\n\t"):
-            raise self.error(column, "must not contain a tab or a line break")
+        if any(unicodedata.category(char) == "Cc" for char in value):
+            raise self.error(column, "must not contain a control character (tab, line break, ...)")
         return value
 
     def identifier(self, column: str) -> str:
