@@ -4,4 +4,4 @@ One line per session. Read the balance from the usage menu in claude.ai/code **b
 
 Format: `- <date> <ID> | balance before $ | balance after $ | spent $ | cap $ | note`
 
-- YYYY-MM-DD T3-S01 | balance before $250.00 | balance after $246.00 | spent $4.00 | cap $5 | (example) replace with the real numbers; delete this line at the first real entry
+- 2026-10-22 T3-S01 | balance before $TODO(Eojin) | balance after $TODO(Eojin) | spent $TODO(Eojin) | cap $5 | ran in one cloud session with the other D0 sessions; see the hub `COSTS.md` for the combined number

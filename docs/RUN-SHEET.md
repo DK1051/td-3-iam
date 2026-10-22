@@ -4,7 +4,7 @@ Day numbers are relative: D0 = the day Eojin uploads the kit. If D0 = Oct 22, th
 
 Status words: `TODO` → `IN PROGRESS` → `DONE (PR #n)`; or `BLOCKED (see CAVEATS)`; or `CUT (moved past Nov 5)`.
 
-- [ ] T3-S01 · D1 · 3E scaffold + trial runbook · needs: kit · cap $5 · status: TODO
+- [x] T3-S01 · D1 · 3E scaffold + trial runbook · needs: kit · cap $5 · status: DONE (PR #1)
 - [ ] T3-S02 · D2 · 3H engine core · needs: T3-S01 merged · cap $12 · status: TODO
 - [ ] T3-S03 · D3 · 3H attestation, SoD, proofing gate · needs: T3-S02 merged · cap $10 · status: TODO
 - [ ] T3-C1 · D6 · class 3H · needs: T3-S03 merged · cap $5 · status: TODO
