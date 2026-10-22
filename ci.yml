@@ -1,0 +1,80 @@
+# CI for td-3-iam.
+# Job `checks` is the one the branch ruleset requires (exact name). Job `pwsh-lint` is a
+# Track 3 extra: PSScriptAnalyzer can only run here, because PowerShell Gallery is blocked
+# in the cloud sessions. No secrets are used anywhere in this file; GITHUB_TOKEN is the
+# automatic read-only token GitHub gives every workflow run.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# gitleaks reads the pull request's commits and comments on a leak
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out (full history, so the secret scan sees every commit)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned dependencies (only if requirements.txt exists)
+        run: |
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt - skipping install"
+          fi
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Run tests (pytest exit code 5 = no tests collected, which is fine before T3-S02)
+        run: pytest -q || [ $? -eq 5 ]
+
+      - name: Secret scan with gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  pwsh-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Lint every PowerShell script with PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -Path . -Recurse -Filter *.ps1 -File | Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' })
+          if ($files.Count -eq 0) {
+            Write-Output 'No .ps1 files yet - nothing to lint.'
+            exit 0
+          }
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+            Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
+          }
+          Import-Module PSScriptAnalyzer
+          $results = @()
+          foreach ($f in $files) {
+            $results += @(Invoke-ScriptAnalyzer -Path $f.FullName -Severity Warning, Error)
+          }
+          if ($results.Count -gt 0) {
+            $results | Format-Table -AutoSize | Out-String -Width 200 | Write-Output
+          }
+          $errorFindings = @($results | Where-Object { $_.Severity -eq 'Error' })
+          Write-Output ("PSScriptAnalyzer: {0} file(s), {1} finding(s), {2} error(s)." -f $files.Count, $results.Count, $errorFindings.Count)
+          if ($errorFindings.Count -gt 0) { exit 1 }

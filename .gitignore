@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets and local configuration — never commit, even "just for testing"
+*.env
+.env*
+*.pem
+*.key
+secrets/
+.dev/
+
+# Local scratch and downloads
+/tmp/
+keycloak-*/
+*.tar.gz
+
+# Track 3 only: read-only tenant exports from scripts/export-config.ps1 contain
+# tenant and object IDs. They stay on Eojin's PC.
+3e-anti-takeover-tenant/export/

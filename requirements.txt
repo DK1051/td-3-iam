@@ -1,0 +1,15 @@
+# td-3-iam — Python dependencies for every project in this repo.
+# Every version below was confirmed to exist on PyPI on 2026-10-21 (`pip index versions`).
+# Install only inside the virtual env: python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+
+# Shared: 3H lifecycle engine (Keycloak Admin REST API over HTTP), config files, tests, linter
+httpx==0.28.1
+pyyaml==6.0.3
+pytest==9.1.1
+ruff==0.17.1
+
+# 3A Agent Passport (T3-S04, first to cut): MCP Python SDK and JWT checks.
+# mcp 2.x renamed FastMCP to MCPServer (mcp.server.mcpserver); see docs/briefs/T3-S04.md before coding.
+# pyjwt needs the [crypto] extra to verify the RS256 tokens that Keycloak issues.
+mcp==2.3.0
+pyjwt[crypto]==2.15.1
