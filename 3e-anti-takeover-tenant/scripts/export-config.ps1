@@ -67,6 +67,9 @@ function Save-Export {
     Write-Output ('{0}: {1} item(s) exported' -f $Name, @($Items).Count)
 }
 
+# Counts how many of the five exports failed, so the last line can tell the truth.
+$script:failedExports = 0
+
 # Print only the exception type, never the message: Graph error bodies can contain object IDs
 # and these logs can end up public.
 function Write-ExportFailure {
@@ -74,6 +77,7 @@ function Write-ExportFailure {
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][System.Management.Automation.ErrorRecord]$ErrorRecord
     )
+    $script:failedExports++
     Write-Output ('{0}: FAILED ({1}); skipped' -f $Name, $ErrorRecord.Exception.GetType().Name)
 }
 
@@ -113,5 +117,12 @@ try {
     Save-Export -Name 'directory-role-members' -Items $roleReport
 }
 catch { Write-ExportFailure -Name 'directory-role-members' -ErrorRecord $_ }
+
+# Say "Done." only when all five exports worked; otherwise you could believe you have evidence
+# when you do not. A non-zero exit code also lets other tools notice the failure.
+if ($script:failedExports -gt 0) {
+    Write-Output ('Finished with {0} of 5 exports failed - see the lines above.' -f $script:failedExports)
+    exit 1
+}
 
 Write-Output 'Done. Files are in 3e-anti-takeover-tenant/export/ (local only, git-ignored).'

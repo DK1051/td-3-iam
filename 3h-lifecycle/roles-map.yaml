@@ -1,0 +1,22 @@
+# roles-map.yaml - which Keycloak groups a person belongs to, worked out from the HR feed.
+#
+# A person's groups = the groups of their department + the groups of their job title.
+# The engine only adds or removes the groups named in this file; any other group a person
+# is in is left alone. Every department and job title used in the feed must appear here,
+# otherwise the engine stops with a clear message (it never guesses).
+#
+# The realm role "manager" is not mapped here on purpose: scripts/keycloak-dev.sh gives it to
+# anyone who appears as somebody's manager_id. The engine never assigns realm roles.
+departments:
+  finance: [finance]
+  member-services: [member-services]
+  it: [it]
+
+job_titles:
+  Payments Officer: [payments-initiate]   # can start (initiate) a payment
+  Finance Manager: [payments-approve]     # can approve a payment someone else started
+  IT Administrator: [privileged]          # powerful admin access
+  Helpdesk Analyst: [helpdesk]
+  IT Manager: []
+  Teller: []
+  Member Service Representative: []

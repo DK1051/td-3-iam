@@ -1,0 +1,14 @@
+# Repo-wide settings for pytest and ruff. The code lives in 3h-lifecycle/ (and 3a-agent-passport/
+# later); test file names must be unique across the repo, so each is prefixed with its project.
+[tool.pytest.ini_options]
+testpaths = ["3h-lifecycle/tests"]
+pythonpath = ["3h-lifecycle"]
+markers = [
+    "keycloak: needs a running Keycloak at localhost:8080",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+# Where first-party code lives, so ruff sorts "import lifecycle" separately from libraries.
+src = ["3h-lifecycle"]
