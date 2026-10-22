@@ -36,6 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None, kc_factory=KeycloakClient) -> int:
     args = build_parser().parse_args(argv)
+    if args.realm == "master":
+        # "master" is Keycloak's own admin realm; the engine must never create people in it.
+        print("ERROR: --realm master is not allowed; use the HR realm, e.g. maple-harbour",
+              file=sys.stderr)
+        return 2
     try:
         feed = load_feed(args.feed)
         service_accounts = load_service_accounts(args.service_accounts)
@@ -53,6 +58,9 @@ def main(argv: list[str] | None = None, kc_factory=KeycloakClient) -> int:
     except (FeedError, engine.EngineError, KeycloakError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:  # noqa: BLE001 - last resort: show the type only, never the text
+        print(f"ERROR: unexpected {type(exc).__name__}", file=sys.stderr)
+        return 3
     return 0
 
 

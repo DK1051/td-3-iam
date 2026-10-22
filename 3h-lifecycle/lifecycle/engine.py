@@ -29,6 +29,12 @@ UPDATE_CLIENT = "update_client"
 SKIPPED = "skipped"
 
 
+# Groups that give powerful access. The plan flags any person who gains one, so a reviewer
+# looking at the table cannot miss it.
+PRIVILEGED_GROUPS = {"privileged"}
+PRIVILEGED_FLAG = " PRIVILEGED"
+
+
 class EngineError(Exception):
     """Something is wrong with the roles map or with the directory the plan needs."""
 
@@ -151,9 +157,10 @@ def _plan_existing_user(person, user: UserState, wanted: set[str], roles_map: Ro
         pieces.append("groups " + _describe_groups(add, remove))
     if changed:
         pieces.append("attributes " + ", ".join(sorted(changed)))
+    flag = PRIVILEGED_FLAG if add & PRIVILEGED_GROUPS else ""
     return Action(
         kind=MOVE_USER, target=person.employee_id,
-        summary=f"{username_for(person.employee_id)}: " + "; ".join(pieces),
+        summary=f"{username_for(person.employee_id)}: " + "; ".join(pieces) + flag,
         details={"user_id": user.id, "attributes": changed,
                  "add": sorted(add), "remove": sorted(remove)},
     )
@@ -183,7 +190,8 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
             actions.append(Action(
                 kind=CREATE_USER, target=joiner.employee_id,
                 summary=(f"{username_for(joiner.employee_id)}: create enabled; "
-                         f"groups {', '.join(sorted(wanted)) or '(none)'}"),
+                         f"groups {', '.join(sorted(wanted)) or '(none)'}"
+                         + (PRIVILEGED_FLAG if wanted & PRIVILEGED_GROUPS else "")),
                 details={
                     "username": username_for(joiner.employee_id),
                     "email": joiner.email, "first_name": joiner.first_name,

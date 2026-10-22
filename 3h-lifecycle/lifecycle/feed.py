@@ -93,10 +93,17 @@ class _Row:
         value = self.values[column].strip()
         if value == "":
             raise self.error(column, "must not be empty")
+        if any(char in value for char in "\r\n\t"):
+            raise self.error(column, "must not contain a tab or a line break")
         return value
 
-    def optional_text(self, column: str) -> str:
-        return self.values[column].strip()
+    def identifier(self, column: str) -> str:
+        """An id (employee, manager, client). It becomes a username and part of a web request,
+        so only letters, digits, dot, underscore and hyphen are allowed."""
+        value = self.text(column)
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", value):
+            raise self.error(column, f"'{value}' may only contain letters, digits, '.', '_' and '-'")
+        return value
 
     def day(self, column: str) -> date:
         value = self.text(column)
@@ -144,10 +151,11 @@ def load_feed(path: str | Path) -> Feed:
     joiners, movers, leavers = [], [], []
     seen: set[str] = set()
     for row in _read_rows(path, FEED_COLUMNS):
-        employee_id = row.text("employee_id")
-        if employee_id in seen:
+        employee_id = row.identifier("employee_id")
+        # Keycloak usernames are lower case, so E1 and e1 would be the same account.
+        if employee_id.lower() in seen:
             raise row.error("employee_id", f"{employee_id} appears more than once in the feed")
-        seen.add(employee_id)
+        seen.add(employee_id.lower())
         action = row.text("action")
         if action == "joiner":
             joiners.append(Joiner(
@@ -157,10 +165,10 @@ def load_feed(path: str | Path) -> Feed:
                 email=row.text("email"),
                 department=row.text("department"),
                 job_title=row.text("job_title"),
-                manager_id=row.text("manager_id"),
+                manager_id=row.identifier("manager_id"),
                 start_date=row.day("start_date"),
-                requested_by=row.text("requested_by"),
-                approved_by=row.text("approved_by"),
+                requested_by=row.identifier("requested_by"),
+                approved_by=row.identifier("approved_by"),
                 id_checked_live_video=row.flag("id_checked_live_video"),
                 references_contacted=row.flag("references_contacted"),
                 education_verified=row.flag("education_verified"),
@@ -175,7 +183,7 @@ def load_feed(path: str | Path) -> Feed:
                 email=row.text("email"),
                 department=row.text("department"),
                 job_title=row.text("job_title"),
-                manager_id=row.text("manager_id"),
+                manager_id=row.identifier("manager_id"),
             ))
         elif action == "leaver":
             for column in ("id_checked_live_video", "references_contacted", "education_verified"):
@@ -196,13 +204,13 @@ def load_service_accounts(path: str | Path) -> list[ServiceAccount]:
     accounts = []
     seen: set[str] = set()
     for row in _read_rows(path, SERVICE_ACCOUNT_COLUMNS):
-        client_id = row.text("client_id")
-        if client_id in seen:
+        client_id = row.identifier("client_id")
+        if client_id.lower() in seen:
             raise row.error("client_id", f"{client_id} appears more than once")
-        seen.add(client_id)
+        seen.add(client_id.lower())
         accounts.append(ServiceAccount(
             client_id=client_id,
-            owner=row.text("owner"),
+            owner=row.identifier("owner"),
             purpose=row.text("purpose"),
             expires_on=row.day("expires_on"),
         ))

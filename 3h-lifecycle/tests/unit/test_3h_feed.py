@@ -99,3 +99,30 @@ def test_bad_service_account_date(tmp_path):
 def test_unreadable_file_message_has_no_path_details(tmp_path):
     with pytest.raises(FeedError, match="cannot read nothing.csv: FileNotFoundError"):
         load_feed(tmp_path / "nothing.csv")
+
+
+def test_employee_ids_that_differ_only_in_case_are_duplicates(tmp_path):
+    with pytest.raises(FeedError, match="more than once"):
+        load_feed(write_feed(tmp_path, GOOD_JOINER, GOOD_JOINER.replace("E9001", "e9001")))
+
+
+@pytest.mark.parametrize("bad_id", ["E 9001", "E9001;rm", "E9001/../x", "E9\u00e91", "E9001?a=b"])
+def test_employee_id_with_odd_characters_is_rejected(tmp_path, bad_id):
+    with pytest.raises(FeedError, match="row 2, column 'employee_id'"):
+        load_feed(write_feed(tmp_path, GOOD_JOINER.replace("E9001", bad_id)))
+
+
+def test_manager_id_and_service_account_ids_are_checked_too(tmp_path):
+    with pytest.raises(FeedError, match="column 'manager_id'"):
+        load_feed(write_feed(tmp_path, GOOD_JOINER.replace(",E1001,2026", ",E 1001,2026")))
+    path = tmp_path / "sa.csv"
+    path.write_text("client_id,owner,purpose,expires_on\nsvc x,E1001,Test,2027-01-01\n")
+    with pytest.raises(FeedError, match="column 'client_id'"):
+        load_service_accounts(path)
+
+
+def test_tab_or_line_break_inside_a_field_is_rejected(tmp_path):
+    with pytest.raises(FeedError, match="first_name.*tab or a line break"):
+        load_feed(write_feed(tmp_path, GOOD_JOINER.replace(",Test,", ',"Te\tst",')))
+    with pytest.raises(FeedError, match="job_title.*tab or a line break"):
+        load_feed(write_feed(tmp_path, GOOD_JOINER.replace("Payments Officer", '"Payments\nOfficer"')))

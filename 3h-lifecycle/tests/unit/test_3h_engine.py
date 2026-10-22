@@ -169,9 +169,6 @@ def test_nothing_in_the_engine_can_delete_a_user():
     for cls in (KeycloakClient, FakeKeycloak):
         names = [name for name, _ in inspect.getmembers(cls, inspect.isfunction)]
         assert [name for name in names if "delete" in name] == []
-    # ...and the only call that removes something is the group-membership one.
-    fake_calls = {w[0] for w in FakeKeycloak.__dict__}
-    assert "delete_user" not in fake_calls
 
 
 def test_fake_and_real_client_have_the_same_calls():
@@ -184,6 +181,34 @@ def test_fake_and_real_client_have_the_same_calls():
         assert list(fake[name].parameters) == list(signature.parameters), name
     extra = set(fake) - set(real)
     assert extra <= {"seed_user", "group_names_of"}
+
+
+def test_plan_flags_anyone_who_gains_the_privileged_group(feed, accounts, roles_map):
+    fake = new_fake(roles_map, with_staff=True)
+    by_target = {a.target: a for a in make_plan(fake, feed, accounts, roles_map)}
+    assert by_target["E2003"].summary.endswith("PRIVILEGED")   # joiner, IT Administrator
+    assert by_target["E3003"].summary.endswith("PRIVILEGED")   # mover, gains privileged
+    assert "PRIVILEGED" not in by_target["E2001"].summary
+    assert "PRIVILEGED" not in by_target["E3002"].summary
+
+
+def test_master_realm_is_refused(capsys, roles_map):
+    fake = new_fake(roles_map, with_staff=True)
+    code = main(["apply", "--feed", str(FEED), "--service-accounts", str(ACCOUNTS),
+                 "--realm", "master"], kc_factory=lambda realm: fake)
+    assert code == 2
+    assert "--realm master is not allowed" in capsys.readouterr().err
+    assert fake.writes == []
+
+
+def test_unexpected_errors_show_only_the_type(capsys):
+    def broken(realm):
+        raise RuntimeError("text that might contain an object id")
+
+    code = main(["plan", "--feed", str(FEED), "--service-accounts", str(ACCOUNTS),
+                 "--realm", "maple-harbour"], kc_factory=broken)
+    error = capsys.readouterr().err
+    assert code == 3 and "unexpected RuntimeError" in error and "object id" not in error
 
 
 # ---- service accounts ----------------------------------------------------------------------
