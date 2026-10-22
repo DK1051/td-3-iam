@@ -9,7 +9,7 @@ Rules for filling it in:
 
 ## Header
 
-- Tenant: Maple Harbour Credit Union (fictional name only)
+- Tenant: `northpine-demo` (made-up organisation name; it holds the fictional Maple Harbour Credit Union test accounts). Never write its default domain name here.
 - Licence obtained: TODO (Business Basic trial / Business Premium trial / Entra ID P1 or P2 trial / none; write what Microsoft actually offered)
 - Trial start date: TODO
 - Recurring billing confirmed OFF on: TODO
