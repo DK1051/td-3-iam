@@ -8,10 +8,10 @@ Never write the tenant ID, the tenant's default domain name, real emails or pass
 
 Strong rules can lock you out of your own tenant. So the order is:
 
-1. Create the two emergency (break-glass) accounts first, so there is always a way back in.
+1. Create the two emergency (break-glass) accounts first, so there is always a way back in. Sign in with each one straight after creating it, before any policy exists, to prove it works.
 2. Create every Conditional Access policy in **Report-only** mode (it logs what the policy *would* have done but blocks nothing), each one excluding the break-glass accounts.
 3. Turn **security defaults** (Microsoft's one-switch bundle of basic protections) off, because they stop Conditional Access policies from being switched on.
-4. Switch the policies **On** one at a time, signing in as the test user after each one.
+4. Switch the policies **On** one at a time, signing in as the test user after each one. The policy that requires strong authentication for admins (`MH-admins-strong-auth`) goes last, and only after an admin has signed in with a passkey at least once (see section 7).
 5. Then set up the remaining controls.
 
 Each section says which row of `controls.md` it covers. Keep `before-after-report.md` open: fill in **Before** before you change a setting, and **After**, **Evidence** and **Date** straight after.
@@ -28,8 +28,10 @@ What it does: creates two emergency administrator accounts that no Conditional A
 2. Create `breakglass1@mapleharbour.example` and `breakglass2@mapleharbour.example` (fictional display names; use the tenant's real default domain only on screen, never in this repo; `TODO(verify on the day)` which domain the form allows).
 3. Give each a long random password from a password generator. Write each on paper (or store in an offline password vault) in separate places. Never type either into this repo, a chat or a cloud session.
 4. Assign the highest administrator role the tenant needs for emergencies. `TODO(verify on the day)`: the role name and its menu path (Entra admin centre → Roles & admins).
-5. Record in the report: creation date and "excluded from all Conditional Access policies (done in sections 3 to 5)".
-6. Do not use these accounts for daily work. Plan to test each once, near the end, and note the sign-in in the log. `TODO(verify on the day)`: where sign-in logs are (Entra admin centre → Monitoring and health → Sign-in logs).
+5. Sign in with **each** break-glass account now, right after creating it and before any Conditional Access policy exists, in a private browser window. This proves the password you wrote down works while nothing can get in the way. Note the result in the report. `TODO(verify on the day)`
+6. If security defaults are still on at this point (they may be on in a new tenant; `TODO(verify on the day)`), a break-glass Global Administrator may be asked to register a second check (MFA) at its first sign-in. That is not a lockout: complete it or note what the screen offered, and record it in the report. `TODO(verify on the day)`: whether and how this prompt appears.
+7. Record in the report: creation date and "excluded from all Conditional Access policies (done in sections 3 to 5)".
+8. Do not use these accounts for daily work. Test each one again at the end (see "After all ten sections") and note the sign-in in the log. `TODO(verify on the day)`: where sign-in logs are (Entra admin centre → Monitoring and health → Sign-in logs).
 
 ## 2. Authentication strength for admins (controls.md row 2)
 
@@ -50,6 +52,8 @@ What it does: closes old sign-in routes that cannot ask for a second check. Need
 4. Target resources: all resources. Conditions → Client apps: select the legacy ("other clients") types. `TODO(verify on the day)`
 5. Grant: Block access.
 6. Enable policy: **Report-only**. Save.
+
+Note for sections 3 to 5: it is `TODO(verify on the day)` whether Microsoft lets you save a Report-only policy while security defaults are still on. If saving a Report-only policy is refused, do section 6 (security defaults off) first, then return to finish sections 3 to 5. Keep the policies in Report-only until section 7 either way, and keep the window with security defaults off short.
 
 ## 4. Conditional Access: require strong authentication for admins, Report-only (controls.md row 4)
 
@@ -72,7 +76,7 @@ What it does: an admin signing in from a device the tenant has not seen must pas
 
 ## 6. Security defaults off (prerequisite, not a row of controls.md)
 
-What it does: security defaults and Conditional Access policies cannot be used together, so security defaults must be disabled before policies can be switched on. Do this only after sections 1 to 5 are done and the break-glass accounts exist.
+What it does: security defaults and Conditional Access policies cannot be used together, so security defaults must be disabled before policies can be switched on. Do this only after sections 1 to 5 are done and both break-glass accounts exist and have been signed in to once. (The only exception is the contingency in the note under section 3.)
 
 1. Entra admin centre → Overview → Properties → **Manage security defaults** → **Disabled**. `TODO(verify on the day)`
 2. Write down in the report the reason you choose if Microsoft asks for one.
@@ -82,9 +86,13 @@ What it does: security defaults and Conditional Access policies cannot be used t
 
 What it does: turns the Report-only policies into enforced ones, with a real sign-in test after each.
 
-For each of `MH-block-legacy-auth`, then `MH-admins-strong-auth`, then `MH-admins-new-device-reauth`, in that order:
+Order: `MH-block-legacy-auth` first, then `MH-admins-new-device-reauth`, and `MH-admins-strong-auth` **last**, because it can lock out an admin who has no strong method yet.
 
-1. Open the Report-only results first (sign-in logs → Conditional Access tab) and check the policy would not have blocked the break-glass accounts. `TODO(verify on the day)`
+**Lockout gate for `MH-admins-strong-auth`.** Do not switch `MH-admins-strong-auth` On until an admin has signed in with a passkey at least once. When you reach it: do section 8 (passkeys) now for the admin test user **and** your own configuring admin account, sign in once with the passkey, then come back and switch this policy On. The same gate applies to `MH-admins-new-device-reauth` if you set it to require an authentication strength (section 5, step 3). Keep a break-glass account's password at hand before you press On. `TODO(verify on the day)`: that a passkey satisfies the strength you chose in section 2.
+
+For each policy, in that order:
+
+1. Open the Report-only results first (sign-in logs → Conditional Access tab) and check what the policy would have done to the admin test user and to the account you are configuring with. The break-glass accounts are excluded from every policy, so they will not appear in these results; that is expected, not an error. `TODO(verify on the day)`
 2. Set Enable policy to **On**. `TODO(verify on the day)`
 3. In a private browser window, sign in as the standard test user, then as the admin test user. Note what happened.
 4. If anything is wrong, switch the policy back to Report-only or Off, and use a break-glass account if you are locked out.
@@ -94,8 +102,8 @@ For each of `MH-block-legacy-auth`, then `MH-admins-strong-auth`, then `MH-admin
 
 What it does: lets staff sign in with a passkey (a sign-in secret tied to their device that a fake website cannot capture).
 
-1. Entra admin centre → Protection → Authentication methods → Policies → passkey / FIDO2 method → enable for a test group. `TODO(verify on the day)`: the method's exact name and the licence tier it needs (`controls.md` marks it `TODO(verify)`).
-2. Register a passkey for the standard test user and sign in with it. `TODO(verify on the day)`
+1. Entra admin centre → Protection → Authentication methods → Policies → passkey / FIDO2 method → enable for a test group that includes the standard test user, the admin test user **and** your own configuring admin account. `TODO(verify on the day)`: the method's exact name and the licence tier it needs (`controls.md` marks it `TODO(verify)`).
+2. Register a passkey for the standard test user, for the admin test user and for your own admin account, and sign in with each passkey once. `TODO(verify on the day)`. You need this done for the two admin accounts before `MH-admins-strong-auth` is switched On in section 7 (that policy's gate sends you here).
 3. Record the licence tier you actually needed in the report.
 
 ## 9. Temporary Access Pass issued only after verified identity (controls.md row 6)
@@ -119,6 +127,6 @@ What it does: staff reset their own password without the helpdesk, and only with
 ## After all ten sections
 
 1. Re-check recurring billing is still OFF (see `TRIAL-RUNBOOK.md`).
-2. Test each break-glass account once and log it, then store the passwords offline again.
+2. Test each break-glass account again and log it (you first signed in with them in section 1), then store the passwords offline again.
 3. Run `scripts/export-config.ps1` (see the 3E README) and keep its output on your PC.
 4. Finish `before-after-report.md`, including "What I could not do and why".

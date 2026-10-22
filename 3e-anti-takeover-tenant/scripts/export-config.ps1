@@ -12,7 +12,7 @@
 #   2. Sign in yourself with read-only permissions:
 #        Connect-MgGraph -Scopes Policy.Read.All,Directory.Read.All
 #      TODO(verify): that these two scopes are enough for every cmdlet below.
-#   3. Run this script from the repository root:
+#   3. Run this script (any folder works; it finds export/ from its own location):
 #        pwsh ./3e-anti-takeover-tenant/scripts/export-config.ps1
 #
 # This script never signs in for you. It checks Get-MgContext and stops if you are not
@@ -37,10 +37,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # The only place this script writes: the git-ignored export folder inside the repo.
-$exportDir = Join-Path -Path (Get-Location).Path -ChildPath '3e-anti-takeover-tenant/export'
+# It is found from this script's own location, so it does not matter where you run it from.
+$exportDir = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..' 'export'))
 
 # Stop early if the user has not connected. The message points to the header above
 # instead of naming the connect command, so this script contains no sign-in call.
+if (-not (Get-Command Get-MgContext -ErrorAction SilentlyContinue)) { Write-Output 'Install the modules named in this script''s header first (step 1).'; exit 1 }
 $context = Get-MgContext
 if ($null -eq $context) {
     Write-Output 'Not connected to Microsoft Graph. Run the connect command shown in this script''s header (step 2), then run this script again.'
@@ -48,7 +50,7 @@ if ($null -eq $context) {
 }
 
 if (-not (Test-Path -Path $exportDir -PathType Container)) {
-    Write-Output "Export folder not found: $exportDir. Run this script from the repository root."
+    Write-Output "Export folder not found: $exportDir. Check that the 3e-anti-takeover-tenant/export/ folder exists."
     exit 1
 }
 
@@ -61,7 +63,7 @@ function Save-Export {
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Items
     )
     $path = Join-Path -Path $exportDir -ChildPath ($Name + '.json')
-    $Items | ConvertTo-Json -Depth 10 | Set-Content -Path $path -Encoding utf8
+    ConvertTo-Json -InputObject $Items -Depth 10 -AsArray | Set-Content -Path $path -Encoding utf8
     Write-Output ('{0}: {1} item(s) exported' -f $Name, @($Items).Count)
 }
 
