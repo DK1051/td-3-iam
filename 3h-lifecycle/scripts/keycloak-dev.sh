@@ -89,7 +89,7 @@ echo "user profile: custom (unmanaged) attributes enabled"
 # The groups come from roles-map.yaml, so the file stays the single source of truth.
 GROUPS_TO_MAKE="$(PYTHONPATH="$LIFECYCLE_DIR" "$PYTHON" -c "
 from lifecycle.engine import load_roles_map
-print('\n'.join(sorted(load_roles_map('$LIFECYCLE_DIR/roles-map.yaml').all_groups())))")"
+print('\n'.join(sorted(load_roles_map('$LIFECYCLE_DIR/roles-map.yaml').managed_groups)))")"
 while IFS= read -r group; do
   create_if_missing "group $group" lenient create groups -r "$REALM" -s name="$group"
 done <<<"$GROUPS_TO_MAKE"

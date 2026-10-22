@@ -1,8 +1,10 @@
 # roles-map.yaml - which Keycloak groups a person belongs to, worked out from the HR feed.
 #
 # A person's groups = the groups of their department + the groups of their job title.
-# The engine only adds or removes the groups named in this file; any other group a person
-# is in is left alone. Every department and job title used in the feed must appear here,
+# managed_groups (at the bottom) lists EVERY group the engine may add or remove, including old
+# groups this map no longer hands out: if somebody is still in one of those, the engine removes
+# them. Any group not listed there is never touched. Every group handed out below must be in
+# managed_groups, and every department and job title used in the feed must appear here,
 # otherwise the engine stops with a clear message (it never guesses).
 #
 # The realm role "manager" is not mapped here on purpose: scripts/keycloak-dev.sh gives it to
@@ -20,3 +22,12 @@ job_titles:
   IT Manager: []
   Teller: []
   Member Service Representative: []
+
+managed_groups:
+  - finance
+  - helpdesk
+  - it
+  - member-services
+  - payments-approve
+  - payments-initiate
+  - privileged

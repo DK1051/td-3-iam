@@ -24,6 +24,7 @@ from lifecycle.feed import Feed, ServiceAccount
 CREATE_USER = "create_user"
 MOVE_USER = "move_user"
 DISABLE_USER = "disable_user"
+ENABLE_USER = "enable_user"
 CREATE_CLIENT = "create_client"
 UPDATE_CLIENT = "update_client"
 SKIPPED = "skipped"
@@ -33,6 +34,11 @@ SKIPPED = "skipped"
 # looking at the table cannot miss it.
 PRIVILEGED_GROUPS = {"privileged"}
 PRIVILEGED_FLAG = " PRIVILEGED"
+
+# Marker the engine puts on a joiner it created DISABLED because their start date is still ahead.
+# The value is the start date. Only an account with this marker is ever enabled by the engine, so
+# an account that an administrator disabled is never switched back on.
+PENDING_START = "pending_start"
 
 
 class EngineError(Exception):
@@ -53,6 +59,8 @@ class Action:
 class RolesMap:
     departments: dict[str, list[str]]
     job_titles: dict[str, list[str]]
+    # Every group the engine may add or remove, including old ones the map no longer hands out.
+    managed_groups: set[str]
 
     def groups_for(self, department: str, job_title: str) -> set[str]:
         """Groups for a person = groups of their department + groups of their job title."""
@@ -62,8 +70,8 @@ class RolesMap:
             raise EngineError(f"job title '{job_title}' is not in roles-map.yaml")
         return set(self.departments[department]) | set(self.job_titles[job_title])
 
-    def all_groups(self) -> set[str]:
-        """Every group this map manages. The engine never touches any other group."""
+    def assigned_groups(self) -> set[str]:
+        """Every group the map gives to somebody."""
         names: set[str] = set()
         for groups in [*self.departments.values(), *self.job_titles.values()]:
             names.update(groups)
@@ -74,9 +82,17 @@ def load_roles_map(path: str | Path) -> RolesMap:
     with Path(path).open(encoding="utf-8") as handle:
         data = yaml.safe_load(handle)
     try:
-        return RolesMap(departments=data["departments"], job_titles=data["job_titles"])
+        roles_map = RolesMap(departments=data["departments"], job_titles=data["job_titles"],
+                             managed_groups=set(data["managed_groups"]))
     except (TypeError, KeyError):
-        raise EngineError("roles-map.yaml needs 'departments' and 'job_titles' sections") from None
+        raise EngineError(
+            "roles-map.yaml needs 'departments', 'job_titles' and 'managed_groups' sections"
+        ) from None
+    unlisted = roles_map.assigned_groups() - roles_map.managed_groups
+    if unlisted:
+        raise EngineError("roles-map.yaml hands out group(s) missing from managed_groups: "
+                          + ", ".join(sorted(unlisted)))
+    return roles_map
 
 
 # ---- reading the current state ------------------------------------------------------------
@@ -143,13 +159,15 @@ def _describe_groups(add: set[str], remove: set[str]) -> str:
     return " ".join(parts)
 
 
-def _plan_existing_user(person, user: UserState, wanted: set[str], roles_map: RolesMap):
+def _plan_existing_user(person, user: UserState, wanted: set[str], roles_map: RolesMap,
+                        extra_attributes: dict | None = None):
     """Compare an existing account with the feed. Returns a move_user action, or None."""
-    changed = {name: value for name, value in _person_attributes(person).items()
+    wanted_attributes = {**_person_attributes(person), **(extra_attributes or {})}
+    changed = {name: value for name, value in wanted_attributes.items()
                if user.attributes.get(name) != value}
     add = wanted - user.groups
-    # Only groups named in roles-map.yaml are managed; any other group is left alone.
-    remove = (user.groups & roles_map.all_groups()) - wanted
+    # Only managed groups are ever removed; any other group is left alone.
+    remove = (user.groups & roles_map.managed_groups) - wanted
     if not (changed or add or remove):
         return None
     pieces = []
@@ -186,30 +204,50 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
     for joiner in feed.joiners:
         user = state.users[joiner.employee_id]
         wanted = wanted_by_person[joiner.employee_id]
+        starts = joiner.start_date.isoformat()
         if user is None:
+            # A joiner whose first day is still ahead is created DISABLED, with the marker.
+            waiting = joiner.start_date > today
+            attributes = _person_attributes(joiner)
+            if waiting:
+                attributes[PENDING_START] = starts
+            state_text = f"create DISABLED until {starts}" if waiting else "create enabled"
             actions.append(Action(
                 kind=CREATE_USER, target=joiner.employee_id,
-                summary=(f"{username_for(joiner.employee_id)}: create enabled; "
+                summary=(f"{username_for(joiner.employee_id)}: {state_text}; "
                          f"groups {', '.join(sorted(wanted)) or '(none)'}"
                          + (PRIVILEGED_FLAG if wanted & PRIVILEGED_GROUPS else "")),
                 details={
                     "username": username_for(joiner.employee_id),
                     "email": joiner.email, "first_name": joiner.first_name,
-                    "last_name": joiner.last_name,
-                    "attributes": _person_attributes(joiner), "groups": sorted(wanted),
+                    "last_name": joiner.last_name, "enabled": not waiting,
+                    "attributes": attributes, "groups": sorted(wanted),
                 },
             ))
-        elif not user.enabled:
+            continue
+        waiting_for_start = (not user.enabled) and PENDING_START in user.attributes
+        if not user.enabled and not waiting_for_start:
             actions.append(Action(
                 kind=SKIPPED, target=joiner.employee_id,
                 summary=f"SKIPPED joiner {joiner.employee_id}: account exists but is disabled "
                         "(a re-hire needs a person to review it)",
             ))
-        else:
-            # The account already exists (for example a half-finished earlier run): fix drift.
-            move = _plan_existing_user(joiner, user, wanted, roles_map)
-            if move:
-                actions.append(move)
+            continue
+        extra = None
+        if waiting_for_start:
+            if joiner.start_date <= today:
+                when = "starts today" if joiner.start_date == today else f"started {starts}"
+                actions.append(Action(
+                    kind=ENABLE_USER, target=joiner.employee_id,
+                    summary=f"{username_for(joiner.employee_id)}: enable ({when})",
+                    details={"user_id": user.id, "remove_attributes": [PENDING_START]},
+                ))
+            else:
+                extra = {PENDING_START: starts}  # the start date may have moved in the feed
+        # The account already exists (for example a half-finished earlier run): fix drift.
+        move = _plan_existing_user(joiner, user, wanted, roles_map, extra)
+        if move:
+            actions.append(move)
 
     for mover in feed.movers:
         user = state.users[mover.employee_id]
@@ -235,7 +273,8 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
         if user.enabled or user.attributes.get("disabled_on") != left_on:
             actions.append(Action(
                 kind=DISABLE_USER, target=leaver.employee_id,
-                summary=(f"{username_for(leaver.employee_id)}: disable (left {left_on}); "
+                summary=(f"{username_for(leaver.employee_id)}: disable now "
+                         f"({'leaves on' if leaver.end_date > today else 'left'} {left_on}); "
                          "groups kept as evidence"),
                 details={"user_id": user.id, "attributes": {"disabled_on": left_on}},
             ))
@@ -289,7 +328,7 @@ def apply(actions: list[Action], kc) -> Counter:
         if action.kind == CREATE_USER:
             user_id = kc.create_user(
                 d["username"], email=d["email"], first_name=d["first_name"],
-                last_name=d["last_name"], enabled=True, attributes=d["attributes"],
+                last_name=d["last_name"], enabled=d["enabled"], attributes=d["attributes"],
             )
             for name in d["groups"]:
                 kc.add_user_to_group(user_id, group_ids[name])
@@ -300,6 +339,8 @@ def apply(actions: list[Action], kc) -> Counter:
                 kc.add_user_to_group(d["user_id"], group_ids[name])
             for name in d["remove"]:
                 kc.remove_user_from_group(d["user_id"], group_ids[name])
+        elif action.kind == ENABLE_USER:
+            kc.update_user(d["user_id"], enabled=True, remove_attributes=d["remove_attributes"])
         elif action.kind == DISABLE_USER:
             kc.update_user(d["user_id"], enabled=False, attributes=d["attributes"])
         elif action.kind == CREATE_CLIENT:

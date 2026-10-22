@@ -57,11 +57,13 @@ class FakeKeycloak:
         self.memberships[user_id] = set()
         return user_id
 
-    def update_user(self, user_id, *, enabled=None, attributes=None):
+    def update_user(self, user_id, *, enabled=None, attributes=None, remove_attributes=None):
         self.writes.append(("update_user", user_id))
         if enabled is not None:
             self.users[user_id]["enabled"] = enabled
         self.users[user_id]["attributes"].update(attributes or {})
+        for name in remove_attributes or []:
+            self.users[user_id]["attributes"].pop(name, None)
 
     def list_groups(self):
         return [{"id": gid, "name": name} for gid, name in self.groups.items()]

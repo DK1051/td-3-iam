@@ -114,14 +114,17 @@ class KeycloakClient:
         return response.headers["Location"].rstrip("/").split("/")[-1]
 
     def update_user(self, user_id: str, *, enabled: bool | None = None,
-                    attributes: dict | None = None) -> None:
-        """Change the enabled flag and/or set attributes; attributes not named are kept."""
+                    attributes: dict | None = None,
+                    remove_attributes: list[str] | None = None) -> None:
+        """Change the enabled flag, set attributes and/or remove some; others are kept."""
         path = self._admin(f"/users/{user_id}")
         user = self._request("GET", path).json()
         if enabled is not None:
             user["enabled"] = enabled
         merged = _one_value_each(user.get("attributes"))
         merged.update(attributes or {})
+        for name in remove_attributes or []:
+            merged.pop(name, None)
         user["attributes"] = {name: [value] for name, value in merged.items()}
         self._request("PUT", path, body=user, ok=(204,))
 
