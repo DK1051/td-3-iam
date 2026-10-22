@@ -63,7 +63,7 @@ function Save-Export {
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Items
     )
     $path = Join-Path -Path $exportDir -ChildPath ($Name + '.json')
-    ConvertTo-Json -InputObject $Items -Depth 10 -AsArray | Set-Content -Path $path -Encoding utf8
+    ConvertTo-Json -InputObject $Items -Depth 10 | Set-Content -Path $path -Encoding utf8
     Write-Output ('{0}: {1} item(s) exported' -f $Name, @($Items).Count)
 }
 
