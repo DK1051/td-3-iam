@@ -1,0 +1,13 @@
+employee_id,action,first_name,last_name,email,department,job_title,manager_id,start_date,end_date,requested_by,approved_by,id_checked_live_video,references_contacted,education_verified
+E2001,joiner,Priya,Nambiar,priya.nambiar@mapleharbour.example,finance,Payments Officer,E1001,2026-11-02,,E1001,E1002,true,true,true
+E2002,joiner,Tomas,Eriksen,tomas.eriksen@mapleharbour.example,member-services,Teller,E1001,2026-11-02,,E1001,E1002,true,true,true
+E2003,joiner,Kwame,Boateng,kwame.boateng@mapleharbour.example,it,IT Administrator,E1002,2026-11-09,,E1002,E1001,true,true,true
+E2004,joiner,Lucia,Ferreira,lucia.ferreira@mapleharbour.example,member-services,Member Service Representative,E1001,2026-11-09,,E1001,E1002,true,true,true
+E2005,joiner,Ravi,Deshmukh,ravi.deshmukh@mapleharbour.example,it,Helpdesk Analyst,E1002,2026-11-16,,E1002,E1001,true,true,true
+E2006,joiner,Sophie,Tremblay,sophie.tremblay@mapleharbour.example,finance,Finance Manager,E1001,2026-11-16,,E1002,E1001,true,true,true
+E3001,mover,Aisha,Rahman,aisha.rahman@mapleharbour.example,finance,Payments Officer,E1001,2026-10-19,,E1001,E1002,,,
+E3002,mover,Jonas,Weber,jonas.weber@mapleharbour.example,finance,Finance Manager,E1001,2026-10-19,,E1002,E1001,,,
+E3003,mover,Mei-Lin,Wong,meilin.wong@mapleharbour.example,it,IT Administrator,E1002,2026-10-26,,E1002,E1001,,,
+E4001,leaver,Oliver,Grant,oliver.grant@mapleharbour.example,finance,Payments Officer,E1001,,2026-10-16,E1001,E1002,,,
+E4002,leaver,Fatima,Haddad,fatima.haddad@mapleharbour.example,member-services,Teller,E1001,,2026-10-09,E1001,E1002,,,
+E4003,leaver,Dmitri,Kovac,dmitri.kovac@mapleharbour.example,it,IT Administrator,E1002,,2026-10-21,E1002,E1001,,,

@@ -13,10 +13,12 @@ Eojin
 
 ## 3H Lifecycle for People and Service Accounts
 Claude (models used)
-- (to be filled at wrap)
+- T3-S02 director (Opus 5.5): checked Needs, planned, asked Eojin the design choices, started Keycloak, logged caveats, opened the PR.
+- T3-S02 `builder` (Sonnet 5.5): closed the T3-S01 export-script gap; wrote the feed parser, Keycloak client, engine and CLI, `keycloak-dev.sh`, the sample feed, 60 unit tests and 9 integration tests, and the 3H README.
+- T3-S02 `redteam` (Fable 5.1): mid-review (16 items + 3 design choices), all handled. `verifier` (Opus 5.5): final check, `docs/verify/T3-S02.md`.
 
 Eojin
-- (to be filled at wrap)
+- Decided: expired service accounts created disabled; leavers disabled at once; joiners disabled until their start date; an explicit `managed_groups` list. Still to do: check each feed row's planned action, write one mover and one leaver row for T3-C1, record the credit balance.
 
 ## 3A Agent Passport
 Claude (models used)
