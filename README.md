@@ -6,13 +6,13 @@ Criminals have learned that the easiest way into a company is not to hack a comp
 
 ## Status
 
-**Planned — kit uploaded, no session has run yet.** Every project below is scaffolded and built in short, directed Claude Code sessions (see `docs/RUN-SHEET.md` for the schedule and `docs/briefs/` for what each session must deliver). This line is updated at the end of every session.
+**3E scaffolded (T3-S01) — Eojin is configuring the tenant; 3H and 3A are still planned.** Every project below is scaffolded and built in short, directed Claude Code sessions (see `docs/RUN-SHEET.md` for the schedule and `docs/briefs/` for what each session must deliver). This line is updated at the end of every session.
 
 ## Projects
 
 | Level | Project | Folder | What it shows | Status |
 |---|---|---|---|---|
-| Easy | **3E Anti-Takeover Tenant** | `3e-anti-takeover-tenant/` | A trial Microsoft 365 / Microsoft Entra "tenant" (one organisation's own copy of Microsoft's identity service) locked down against reset-based takeover: phishing-resistant sign-in, Conditional Access rules, break-glass accounts, a before/after report, and a read-only configuration export script. Controls are mapped to Canadian guidance (OSFI B-13, Cyber Centre baseline controls, AL26-010) as "aligned to" — never a compliance claim. | Planned |
+| Easy | **3E Anti-Takeover Tenant** | `3e-anti-takeover-tenant/` | A trial Microsoft 365 / Microsoft Entra "tenant" (one organisation's own copy of Microsoft's identity service) locked down against reset-based takeover: phishing-resistant sign-in, Conditional Access rules, break-glass accounts, a before/after report, and a read-only configuration export script. Controls are mapped to Canadian guidance (OSFI B-13, Cyber Centre baseline controls, AL26-010) as "aligned to" — never a compliance claim. | Scaffolded — Eojin is configuring the tenant |
 | Hard | **3H Lifecycle for People and Service Accounts** | `3h-lifecycle/` | A Python engine that reads an HR feed (joiners, movers, leavers) and creates, moves or disables accounts in Keycloak (an open-source identity server used here as a stand-in for a corporate directory). Nobody is created until their identity was verified; managers get a quarterly access review; three separation-of-duties rules; every service account has an owner and an expiry date. | Planned |
 | Hard + AI | **3A Agent Passport** | `3a-agent-passport/` | An AI "access assistant" that talks to the 3H engine through an MCP server (Model Context Protocol: a standard way to give an AI model a fixed menu of tools). The assistant can list requests and *propose* a change; it has no tool that grants anything. Grants happen only when a human runs an approval script with a manager's token. Tested against 30 malicious requests (English and Korean) written by Eojin. | Planned — first project to cut if time or credit runs short |
 
