@@ -62,12 +62,16 @@ def run_sod(args, feed, service_accounts, roles_map, state) -> int:
         directory_overlap=engine.directory_overlap(feed, state),
         unlisted_clients=state.other_clients,
     )
+    blocked = engine.bad_row_lines(feed, service_accounts)
+    for line in blocked:
+        print(line)
+    note = f" {len(blocked)} unreadable row(s) were not checked." if blocked else ""
     if not violations:
-        print("SoD check: no violations.")
+        print("SoD check: no violations." + note)
         return 0
     for violation in violations:
         print(f"{violation.rule_id}  {violation.subject}: {violation.reason}")
-    print(f"SoD check: {len(violations)} violation(s).")
+    print(f"SoD check: {len(violations)} violation(s)." + note)
     return 1
 
 

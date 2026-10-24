@@ -158,3 +158,75 @@ def test_the_sod_command_reports_the_same_reasons(tmp_path, capsys):
                 kc_factory=lambda realm: fake)
     assert code == 1
     assert "SOD-1  E2001: requester E7777 is not in the directory" in capsys.readouterr().out
+
+
+# ---- a malformed row is blocked on its own; the rest of the run goes ahead -------------------
+
+def run_apply(tmp_path, feed_text, accounts_text=None, command="apply"):
+    feed_path = tmp_path / "feed.csv"
+    feed_path.write_text(feed_text, encoding="utf-8")
+    accounts_path = tmp_path / "accounts.csv"
+    accounts_path.write_text(accounts_text if accounts_text is not None
+                             else (FIXTURES / "service-accounts-v2.csv").read_text(),
+                             encoding="utf-8")
+    fake = seeded_fake(ROLES)
+    args = [command, "--feed", str(feed_path), "--service-accounts", str(accounts_path),
+            "--realm", "maple-harbour", "--today", TODAY.isoformat()]
+    if command == "apply":
+        args += ["--reports-dir", str(tmp_path / "reports")]
+    return fake, main(args, kc_factory=lambda realm: fake)
+
+
+def test_a_joiner_row_with_True_is_blocked_while_the_leaver_is_still_disabled(tmp_path, capsys):
+    text = (FIXTURES / "feed-v2.csv").read_text()
+    text = text.replace("2026-11-02,,E1001,E1002,true,true,true\nE2002",
+                        "2026-11-02,,E1001,E1002,True,true,true\nE2002")   # E2001: "True"
+    fake, code = run_apply(tmp_path, text)
+    out = capsys.readouterr().out
+    assert code == 0                                       # blocked rows are reports: exit 0
+    assert "BLOCKED row 2 E2001: column 'id_checked_live_video': 'True' must be exactly" in out
+    assert fake.get_user_by_username("e2001") is None      # nothing done for that row
+    assert fake.get_user_by_username("e4001")["enabled"] is False      # the leaver went ahead
+    assert fake.get_user_by_username("e2002") is not None  # and so did the other joiners
+    report = (tmp_path / "reports" / "blocked-joiners.md").read_text()
+    assert report.startswith("# Blocked rows")
+    assert "| feed | 2 | E2001 | column 'id_checked_live_video'" in report
+
+
+def test_a_malformed_leaver_row_is_blocked_and_the_other_leavers_still_go(tmp_path, capsys):
+    text = (FIXTURES / "feed-v2.csv").read_text().replace(",,2026-10-16,E1001", ",,,E1001")
+    fake, code = run_apply(tmp_path, text)
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "BLOCKED row 11 E4001: column 'end_date': must not be empty" in out
+    assert fake.get_user_by_username("e4001")["enabled"] is True        # not touched: fix the row
+    assert fake.get_user_by_username("e4002")["enabled"] is False
+
+
+def test_a_malformed_service_account_row_is_blocked_and_the_others_still_run(tmp_path, capsys):
+    accounts = ("client_id,owner,purpose,expires_on\n"
+                "svc-ok,E1001,Fine,2027-01-01\nsvc-bad,E1001,Broken date,31/12/2027\n")
+    fake, code = run_apply(tmp_path, (FIXTURES / "feed-v2.csv").read_text(), accounts)
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "BLOCKED service-account row 3 svc-bad: column 'expires_on'" in out
+    assert fake.get_client_by_client_id("svc-ok") is not None
+    assert fake.get_client_by_client_id("svc-bad") is None
+
+
+def test_the_sod_command_lists_blocked_rows_and_says_they_were_not_checked(tmp_path, capsys):
+    text = (FIXTURES / "feed-v2.csv").read_text().replace(
+        "2026-11-02,,E1001,E1002,true,true,true\nE2002",
+        "2026-11-02,,E1001,E1002,True,true,true\nE2002")
+    _, code = run_apply(tmp_path, text, command="sod")
+    out = capsys.readouterr().out
+    assert code == 1                                       # the real violations still count
+    assert "BLOCKED row 2 E2001:" in out and "1 unreadable row(s) were not checked." in out
+    assert "SOD-2  E3004" in out
+
+
+def test_structural_problems_still_stop_the_whole_run(tmp_path, capsys):
+    text = (FIXTURES / "feed-v2.csv").read_text()
+    fake, code = run_apply(tmp_path, text + text.splitlines()[1] + "\n")      # duplicate E2001
+    assert code == 2 and "more than once" in capsys.readouterr().err
+    assert fake.writes == []

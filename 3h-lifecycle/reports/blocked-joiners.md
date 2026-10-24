@@ -1,6 +1,6 @@
-# Blocked joiners
+# Blocked rows
 
-These rows of the HR feed were refused by the proofing gate, so no account was created or changed. Fix the missing checks in the feed and run `apply` again.
+These rows of the HR files were refused, so nothing was created or changed for them. Fix the feed and run `apply` again. Every other row was still processed.
 
 ## Joiners
 
@@ -14,3 +14,7 @@ These rows of the HR feed were refused by the proofing gate, so no account was c
 ## Movers
 
 None. Every mover row passed the gate.
+
+## Rows that could not be read
+
+None. Every row could be read.

@@ -358,7 +358,30 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
                                    leaver_ids, today)
     warning_actions = _plan_manager_warnings(feed, state, leaver_ids)
     return (leaver_actions + owner_disables + mover_actions + joiner_actions + client_actions
-            + warning_actions)
+            + _bad_row_actions(feed, service_accounts) + warning_actions)
+
+
+def bad_row_lines(feed: Feed, service_accounts) -> list[str]:
+    """One 'BLOCKED row ...' line per malformed CSV row (the same text the plan shows)."""
+    lines = []
+    for bad in [*feed.bad_rows, *getattr(service_accounts, "bad_rows", [])]:
+        kind = "row" if bad.source == "feed" else "service-account row"
+        lines.append(f"BLOCKED {kind} {bad.line} {bad.who}: {bad.reason}")
+    return lines
+
+
+def _bad_row_actions(feed: Feed, service_accounts) -> list[Action]:
+    """Malformed rows are reported and skipped; every other row still runs."""
+    actions = []
+    for bad in [*feed.bad_rows, *getattr(service_accounts, "bad_rows", [])]:
+        kind = "row" if bad.source == "feed" else "service-account row"
+        actions.append(Action(
+            kind=BLOCKED, target=bad.who if bad.who != "?" else f"line {bad.line}",
+            summary=f"BLOCKED {kind} {bad.line} {bad.who}: {bad.reason}",
+            details={"row": "unreadable", "source": bad.source, "line": bad.line,
+                     "who": bad.who, "reason": bad.reason},
+        ))
+    return actions
 
 
 def _plan_leavers(feed: Feed, state: State, today: date) -> list[Action]:

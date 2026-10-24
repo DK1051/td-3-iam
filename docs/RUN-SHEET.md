@@ -6,7 +6,7 @@ Status words: `TODO` → `IN PROGRESS` → `DONE (PR #n)`; or `BLOCKED (see CAVE
 
 - [x] T3-S01 · D1 · 3E scaffold + trial runbook · needs: kit · cap $5 · status: DONE (PR #1)
 - [x] T3-S02 · D2 · 3H engine core · needs: T3-S01 merged · cap $12 · status: DONE (PR #4)
-- [ ] T3-S03 · D3 · 3H attestation, SoD, proofing gate · needs: T3-S02 merged · cap $10 · status: TODO
+- [x] T3-S03 · D3 · 3H attestation, SoD, proofing gate · needs: T3-S02 merged · cap $10 · status: DONE (PR #5)
 - [ ] T3-C1 · D6 · class 3H · needs: T3-S03 merged · cap $5 · status: TODO
 - [ ] T3-S04 · D9 · 3A Agent Passport (redteam first) — FIRST TO CUT · needs: T3-S03 merged, Eojin's 30 requests (minimum 15, at least 5 in Korean) · cap $18 · status: TODO
 - [ ] T3-C2 · D10 · class 3A · needs: T3-S04 merged · cap $4 · status: TODO

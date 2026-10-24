@@ -55,7 +55,16 @@ The proofing gate (written in `lifecycle/engine.py`):
   `BLOCKED joiner E2007: proofing incomplete - id_checked_live_video` and nothing is created.
 - A joiner or mover row is also blocked when the requester and the approver are the same person, when either of them
   is the person the change is for, or when either of them has left, is disabled or cannot be found in the directory.
-- Blocked rows are written to `reports/blocked-joiners.md` by `apply` ([example](reports/blocked-joiners.md)).
+- Blocked rows are written to `reports/blocked-joiners.md` by `apply` ([example](reports/blocked-joiners.md)); the
+  file name is kept from the first version, but it now lists every blocked row.
+- **A malformed row blocks only itself.** A wrong value in one row (`True` instead of `true`, a date written
+  `02/11/2026`, an id with a space, a control character, a leaver with no end date) turns that row into
+  `BLOCKED row 2 E2001: column 'id_checked_live_video': 'True' must be exactly 'true' or 'false'`. Nothing is done for it,
+  every other row still runs, and the row is listed under "Rows that could not be read" in the report. The same applies
+  to the service-account CSV and to the `sod` command, which prints the blocked rows and says they were not checked.
+  A **structural** problem still stops the whole run with a clear error: a file that cannot be read, missing
+  or extra columns, or the same employee id twice (two rows for one person are ambiguous, so the engine will not
+  guess which is right). Control characters in a bad value are shown as escapes, never printed raw.
 - **Leaver rows are never blocked.** The gate exists to stop access being *given*. A leaver row takes access *away*;
   blocking it (for example because someone filled in the approver wrongly) would keep a former employee's
   account alive. So switching access off is always allowed.
@@ -174,7 +183,7 @@ python -m lifecycle attest $FILES --today 2026-10-22 --quarter 2026-Q4 --out 3h-
 - Settings come from environment variables: `KC_URL` (default `http://localhost:8080`), `KC_ADMIN_USER`
   (default `admin`) and `KC_ADMIN_PASSWORD` (default `dev-only-not-secret`, a documented throwaway for a local
   test server that is deleted with the session and never used anywhere else).
-- Exit codes: 0 fine; 1 `sod` found violations; 2 bad input or a Keycloak error; 3 unexpected error; 4 `apply`
+- Exit codes: 0 fine (BLOCKED, SKIPPED and WARNING lines do not change the exit code); 1 `sod` found violations; 2 bad input or a Keycloak error; 3 unexpected error; 4 `apply`
   finished but some actions failed.
 - The engine refuses `--realm master` (Keycloak's own admin realm).
 - Files: `hr/hr-feed.csv` (the extended sample: 17 rows), `hr/service-accounts.csv` (5 rows), `hr/fixtures/` (the
@@ -223,10 +232,10 @@ $ ruff check .
 All checks passed!
 
 $ KC_URL=http://localhost:9 pytest -q     # Keycloak unreachable: the Keycloak tests are skipped
-125 passed, 21 skipped in 0.47s
+133 passed, 21 skipped in 0.54s
 
 $ pytest -q -m keycloak                    # Keycloak up
-21 passed, 125 deselected in 134.95s (0:02:14)
+21 passed, 133 deselected in 131.14s (0:02:11)
 ```
 
 What the Keycloak tests prove against the real server: a leaver's normal and offline login tokens work before `apply`
@@ -251,6 +260,8 @@ exact wording against the published guideline.
 
 ## Limits
 
+- A malformed **leaver** row is blocked like any other, so that person keeps their access until the row is fixed.
+  The BLOCKED line and the report make it prominent, but nothing fixes it automatically.
 - Dev server only, with made-up data. The admin password is a documented throwaway. No real tenant or Azure
   subscription is touched. No real HR system and no email delivery: the CSV files and Markdown files stand in.
 - Attestation decisions are read by a person; the engine never applies a "revoke" by itself (that would need a signed
