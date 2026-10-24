@@ -138,19 +138,34 @@ class KeycloakClient:
         every ordinary refresh token issued before now. It does NOT remove offline tokens."""
         self._request("POST", self._admin(f"/users/{user_id}/logout"), ok=(204,))
 
+    def user_sessions(self, user_id: str) -> list[dict]:
+        """The user's live login sessions (GET .../users/{id}/sessions)."""
+        return self._request("GET", self._admin(f"/users/{user_id}/sessions")).json()
+
+    def consent_clients(self, user_id: str) -> list[str]:
+        """Client ids that hold a consent or an offline token for this user
+        (GET .../users/{id}/consents)."""
+        grants = self._request("GET", self._admin(f"/users/{user_id}/consents")).json()
+        return [grant["clientId"] for grant in grants]
+
     def revoke_offline_tokens(self, user_id: str) -> None:
         """Remove the user's offline tokens (long-lived refresh tokens that survive a logout).
-        GET .../users/{id}/consents lists the clients holding one ("Offline Token"); DELETE
-        .../users/{id}/consents/{clientId} revokes them. This also withdraws any consent."""
-        grants = self._request("GET", self._admin(f"/users/{user_id}/consents")).json()
-        for grant in grants:
-            self._request("DELETE", self._admin(f"/users/{user_id}/consents/{grant['clientId']}"),
+        Keycloak has no call that lists only offline tokens, so this deletes EVERY consent the
+        user has (DELETE .../users/{id}/consents/{clientId}); that is what a leaver should have.
+        Nothing to remove is not an error."""
+        for client_id in self.consent_clients(user_id):
+            self._request("DELETE", self._admin(f"/users/{user_id}/consents/{client_id}"),
                           ok=(204,))
 
     # ---- groups ---------------------------------------------------------------------------
 
     def list_groups(self) -> list[dict]:
         return self._request("GET", self._admin("/groups"), params={"max": "1000"}).json()
+
+    def group_members(self, group_id: str) -> list[dict]:
+        """The users in a group (GET .../groups/{id}/members)."""
+        return self._request("GET", self._admin(f"/groups/{group_id}/members"),
+                             params={"max": "1000"}).json()
 
     def user_groups(self, user_id: str) -> list[dict]:
         return self._request("GET", self._admin(f"/users/{user_id}/groups")).json()
@@ -162,6 +177,10 @@ class KeycloakClient:
         self._request("DELETE", self._admin(f"/users/{user_id}/groups/{group_id}"), ok=(204,))
 
     # ---- service accounts (Keycloak "clients") ---------------------------------------------
+
+    def list_clients(self) -> list[dict]:
+        """Every client in the realm, with its attributes (GET .../clients)."""
+        return self._request("GET", self._admin("/clients"), params={"max": "1000"}).json()
 
     def get_client_by_client_id(self, client_id: str) -> dict | None:
         response = self._request("GET", self._admin("/clients"), params={"clientId": client_id})

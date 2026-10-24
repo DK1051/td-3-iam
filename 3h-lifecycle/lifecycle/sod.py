@@ -3,9 +3,12 @@
 This module never talks to Keycloak. The engine hands it what the directory would look like once
 the feed has been applied ("projected state"), so a conflict is reported before `apply`.
 
-  SOD-1  requester and approver differ          (checked on the feed: joiner and mover rows)
-  SOD-2  nobody holds payments-initiate and payments-approve together   (projected groups)
-  SOD-3  every service account has an owner who is a current, enabled employee
+  SOD-1  requester and approver are two different, current people, and neither is the person
+         the change is for                       (checked on the feed: joiner and mover rows)
+  SOD-2  nobody holds payments-initiate and payments-approve together   (projected groups, and
+         the real members of both groups in the directory, feed or not)
+  SOD-3  every service account has an owner who is a current, enabled employee (the CSV, and
+         clients already in the directory that are not in the CSV: reported, never changed)
 
 Leaver rows are not checked: switching access off is always allowed, because holding it back
 would keep the access alive.
@@ -54,6 +57,24 @@ class Violation:
 
 def requester_equals_approver(person) -> bool:
     return person.requested_by.lower() == person.approved_by.lower()
+
+
+def approval_problems(person, leaver_ids: set[str], users: dict) -> list[str]:
+    """Everything wrong with who asked for and who approved this joiner or mover row (SOD-1).
+    An empty list means the row is fine."""
+    problems = []
+    if requester_equals_approver(person):
+        problems.append("requester equals approver")
+    me = person.employee_id.lower()
+    if person.requested_by.lower() == me:
+        problems.append("requester is the person themselves")
+    if person.approved_by.lower() == me:
+        problems.append("approver is the person themselves")
+    for role, who in (("requester", person.requested_by), ("approver", person.approved_by)):
+        status = person_status(who, leaver_ids, users)
+        if status != "active":
+            problems.append(f"{role} {who} {PROBLEM_TEXT[status]}")
+    return problems
 
 
 def has_payment_conflict(groups: set[str]) -> bool:
@@ -111,28 +132,45 @@ def load_rules(path: str | Path) -> list[Rule]:
 # ---- evaluating ---------------------------------------------------------------------------
 
 def evaluate(rules: list[Rule], feed: Feed, service_accounts: list[ServiceAccount],
-             projected_groups: dict[str, set[str]], users: dict) -> list[Violation]:
-    """Return every violation. `projected_groups` maps employee id to the groups the person
-    would have after the feed is applied; `users` is the directory state (see person_status)."""
+             projected_groups: dict[str, set[str]], users: dict,
+             directory_overlap: frozenset[str] | set[str] = frozenset(),
+             unlisted_clients: list[dict] = ()) -> list[Violation]:
+    """Return every violation.
+
+    projected_groups maps employee id to the groups the person would have after the feed is
+    applied; users is the directory state (see person_status). directory_overlap holds the
+    usernames found in BOTH payment groups in the directory who are not in the feed, and
+    unlisted_clients the service-account clients in the directory that are not in the CSV."""
     violations: list[Violation] = []
     leavers = leaver_ids_of(feed)
     for rule in rules:
         if rule.check == "requester-not-approver":
             for person in [*feed.joiners, *feed.movers]:
-                if requester_equals_approver(person):
-                    violations.append(Violation(
-                        rule.id, person.employee_id,
-                        f"requested and approved by the same person ({person.requested_by})"))
+                problems = approval_problems(person, leavers, users)
+                if problems:
+                    violations.append(Violation(rule.id, person.employee_id, "; ".join(problems)))
         elif rule.check == "no-initiate-and-approve":
             for person in [*feed.joiners, *feed.movers]:
                 if has_payment_conflict(projected_groups[person.employee_id]):
                     violations.append(Violation(
                         rule.id, person.employee_id,
                         f"would be in both {PAYMENTS_INITIATE} and {PAYMENTS_APPROVE}"))
+            for username in sorted(directory_overlap):
+                violations.append(Violation(
+                    rule.id, username,
+                    f"is in both {PAYMENTS_INITIATE} and {PAYMENTS_APPROVE} in the directory "
+                    "(not in this feed, so only reported)"))
         else:
             for account in service_accounts:
                 problem = owner_problem(account.owner, leavers, users)
                 if problem:
                     violations.append(Violation(rule.id, account.client_id,
                                                 f"service account {problem}"))
+            for client in unlisted_clients:
+                owner = (client.get("attributes") or {}).get("owner", "")
+                problem = owner_problem(owner, leavers, users)
+                if problem:
+                    violations.append(Violation(
+                        rule.id, client["clientId"],
+                        f"service account {problem} (not in the CSV, so only reported)"))
     return violations

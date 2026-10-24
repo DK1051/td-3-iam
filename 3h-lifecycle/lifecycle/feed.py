@@ -63,6 +63,7 @@ class Leaver:
     first_name: str
     last_name: str
     end_date: date
+    manager_id: str = ""   # optional; only used to list the leaver in the attestation
 
 
 @dataclass(frozen=True)
@@ -201,6 +202,7 @@ def load_feed(path: str | Path) -> Feed:
                 first_name=row.text("first_name"),
                 last_name=row.text("last_name"),
                 end_date=row.day("end_date"),
+                manager_id=row.identifier("manager_id") if row.values["manager_id"].strip() else "",
             ))
         else:
             raise row.error("action", f"'{action}' must be joiner, mover or leaver")

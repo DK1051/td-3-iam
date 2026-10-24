@@ -27,7 +27,9 @@ def warning_for(plan, employee_id):
 def violations_for(feed, accounts, fake):
     state = engine.read_state(fake, feed, accounts)
     projected = engine.projected_groups(feed, ROLES, state)
-    return sod.evaluate(sod.load_rules(SOD_RULES), feed, accounts, projected, state.users)
+    return sod.evaluate(sod.load_rules(SOD_RULES), feed, accounts, projected, state.users,
+                        directory_overlap=engine.directory_overlap(feed, state),
+                        unlisted_clients=state.other_clients)
 
 
 # ---- the rules file ------------------------------------------------------------------------
@@ -201,3 +203,71 @@ def test_no_warnings_when_every_manager_is_active():
     feed, accounts = load_v2()
     plan = make_plan(seeded_fake(ROLES), feed, accounts, ROLES)
     assert [a for a in plan if a.kind == "warning"] == []
+
+
+# ---- the directory itself, not only the feed ------------------------------------------------
+
+def test_sod2_also_finds_people_already_in_both_payment_groups_who_are_not_in_the_feed(capsys):
+    feed, accounts = load_v2()
+    fake = seeded_fake(ROLES)
+    fake.seed_user("e9001", ["payments-initiate", "payments-approve"])     # not in the feed
+    found = [(v.rule_id, v.subject) for v in violations_for(feed, accounts, fake)]
+    assert ("SOD-2", "e9001") in found
+    code = main(["sod", "--feed", str(FIXTURES / "feed-v2.csv"), "--service-accounts",
+                 str(FIXTURES / "service-accounts-v2.csv"), "--realm", "maple-harbour"],
+                kc_factory=lambda realm: fake)
+    assert code == 1 and "SOD-2  e9001: is in both" in capsys.readouterr().out
+
+
+def test_a_feed_person_in_both_groups_who_the_feed_fixes_is_not_reported_twice():
+    feed, accounts = load_v2()
+    fake = seeded_fake(ROLES)
+    # E3002 holds initiate and the feed moves her to approve only: no violation either way.
+    fake.memberships[fake.get_user_by_username("e3002")["id"]].add(
+        fake._group_id("payments-approve"))
+    found = [v.subject for v in violations_for(feed, accounts, fake)]
+    assert "E3002" not in found and "e3002" not in found
+
+
+def test_sod3_also_reports_service_account_clients_that_are_not_in_the_csv():
+    feed, accounts = load_v2()
+    fake = seeded_fake(ROLES)
+    attrs = {"purpose": "x", "expires_on": "2027-01-01"}
+    fake.create_client("svc-nobody", enabled=True, attributes=attrs)               # no owner
+    fake.create_client("svc-gone", enabled=True, attributes={**attrs, "owner": "E4001"})
+    fake.create_client("svc-fine", enabled=True, attributes={**attrs, "owner": "E1001"})
+    fake.create_client("admin-cli", enabled=True, attributes={})                   # built in
+    found = {(v.rule_id, v.subject) for v in violations_for(feed, accounts, fake)}
+    assert ("SOD-3", "svc-nobody") in found and ("SOD-3", "svc-gone") in found
+    assert ("SOD-3", "svc-fine") not in found and ("SOD-3", "admin-cli") not in found
+    # Reported only: the engine does not manage these, so it does not disable them.
+    engine.apply(make_plan(fake, feed, accounts, ROLES), fake)
+    assert fake.get_client_by_client_id("svc-nobody")["enabled"] is True
+
+
+# ---- the manager warning also covers a manager who has not started yet ----------------------
+
+def test_a_manager_who_has_not_started_yet_gets_a_warning(tmp_path):
+    feed, accounts = load_v2()
+    fake = seeded_fake(ROLES)
+    engine.apply(make_plan(fake, feed, accounts, ROLES), fake)       # E2003 now exists, pending
+    new_feed = edited_feed(tmp_path, "feed-v2.csv",
+                           ("priya.nambiar@mapleharbour.example,finance,Payments Officer,E1001",
+                            "priya.nambiar@mapleharbour.example,finance,Payments Officer,E2003"))
+    plan = make_plan(fake, new_feed, accounts, ROLES)
+    assert "manager has not started yet - reassign E2001" in warning_for(plan, "E2001").summary
+
+
+# ---- roles-map note --------------------------------------------------------------------------
+
+def test_loading_a_map_with_a_payments_conflicting_pair_warns_but_works(tmp_path):
+    with pytest.warns(engine.RolesMapWarning, match="payments-ops.*Finance Manager"):
+        roles = engine.load_roles_map(ROLES_MAP)
+    assert ("payments-ops", "Finance Manager") in roles.conflicting_pairs()
+    quiet = tmp_path / "roles-map.yaml"
+    quiet.write_text("departments: {finance: [finance]}\njob_titles: {Teller: []}\n"
+                     "managed_groups: [finance]\n")
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        engine.load_roles_map(quiet)

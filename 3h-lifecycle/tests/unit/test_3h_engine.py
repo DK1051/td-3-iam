@@ -101,10 +101,10 @@ def test_cli_apply_dry_run_behaves_like_plan(capsys, roles_map):
     assert code == 0 and "Applied" not in output and fake.writes == []
 
 
-def test_cli_apply_twice_second_run_changes_nothing(capsys, roles_map):
+def test_cli_apply_twice_second_run_changes_nothing(capsys, roles_map, tmp_path):
     fake = new_fake(roles_map, with_staff=True)
     args = ["apply", "--feed", str(FEED), "--service-accounts", str(ACCOUNTS),
-            "--realm", "maple-harbour", "--today", "2026-10-22"]
+            "--realm", "maple-harbour", "--today", "2026-10-22", "--reports-dir", str(tmp_path)]
     assert main(args, kc_factory=lambda realm: fake) == 0
     first = capsys.readouterr().out
     assert ("Applied: create_user=6, move_user=3, disable_user=3, create_client=4") in first
@@ -270,7 +270,7 @@ def test_fake_and_real_client_have_the_same_calls():
         assert name in fake, f"fake is missing {name}"
         assert list(fake[name].parameters) == list(signature.parameters), name
     extra = set(fake) - set(real)
-    assert extra <= {"seed_user", "group_names_of"}
+    assert extra <= {"seed_user", "group_names_of", "give_access"}
 
 
 def test_plan_flags_anyone_who_gains_the_privileged_group(feed, accounts, roles_map):

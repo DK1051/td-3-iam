@@ -71,6 +71,16 @@ def refresh_status(refresh_token):
     return response.status_code
 
 
+def client_credentials_status(kc, client_id):
+    """Ask for a token as the service account itself (never prints the secret)."""
+    uuid = kc.get_client_by_client_id(client_id)["id"]
+    secret = admin_get(kc, f"/clients/{uuid}/client-secret")["value"]
+    response = httpx.post(f"{KC_URL}/realms/{REALM}/protocol/openid-connect/token", timeout=15,
+                          data={"grant_type": "client_credentials", "client_id": client_id,
+                                "client_secret": secret})
+    return response.status_code
+
+
 @pytest.fixture(scope="module")
 def world(tmp_path_factory):
     env = {**os.environ, "PYTHON": sys.executable}
@@ -184,6 +194,25 @@ def test_second_plan_has_nothing_to_change(world, kc):
     assert [a for a in actions if a.kind not in engine.REPORT_ONLY] == []
 
 
+# ---- attestation ---------------------------------------------------------------------------------
+
+def test_attest_writes_one_file_per_manager_plus_unassigned(world, tmp_path):
+    out = tmp_path / "attestation"
+    code, output = run_cli("attest", *cli_args(), "--quarter", "2026-Q4", "--out", str(out))
+    assert code == 0 and "Wrote 3 attestation file(s)" in output
+    assert sorted(p.name for p in out.glob("*.md")) == ["E1001.md", "E1002.md", "unassigned.md"]
+    feed = load_feed(FEED)
+    for manager_id in ("E1001", "E1002"):
+        text = (out / f"{manager_id}.md").read_text(encoding="utf-8")
+        reports = [p for p in [*feed.joiners, *feed.movers, *feed.leavers]
+                   if p.manager_id == manager_id]
+        owned = [a for a in load_service_accounts(ACCOUNTS) if a.owner == manager_id]
+        assert text.count("[ ] keep  [ ] revoke") == len(reports) + len(owned)
+    e1001 = (out / "E1001.md").read_text(encoding="utf-8")
+    assert "no (disabled 2026-10-16)" in e1001            # the leaver, disabled, groups still listed
+    assert "svc-orphan-export" in (out / "unassigned.md").read_text(encoding="utf-8")
+
+
 # ---- these change Keycloak further, so they run last --------------------------------------------
 
 def test_g1_the_old_tokens_stay_dead_even_if_the_account_is_switched_on_again(world, kc):
@@ -198,6 +227,7 @@ def test_g1_the_old_tokens_stay_dead_even_if_the_account_is_switched_on_again(wo
 
 
 def test_g2_a_service_account_whose_owner_left_is_disabled_and_stays_disabled(world, kc, tmp_path):
+    assert client_credentials_status(kc, "svc-payments-batch") == 200     # it works for now
     accounts = tmp_path / "accounts.csv"
     accounts.write_text(ACCOUNTS.read_text(encoding="utf-8").replace(
         "svc-payments-batch,E1001", "svc-payments-batch,E4001"), encoding="utf-8")
@@ -207,6 +237,7 @@ def test_g2_a_service_account_whose_owner_left_is_disabled_and_stays_disabled(wo
     client = kc.get_client_by_client_id("svc-payments-batch")
     assert client["enabled"] is False
     assert client["attributes"]["disabled_by_engine"] == "SOD-3 no active owner"
+    assert client_credentials_status(kc, "svc-payments-batch") != 200     # no new tokens
     # Naming a healthy owner again does not switch it back on.
     code, output = run_cli("apply", *cli_args(), "--reports-dir", str(tmp_path / "r"))
     assert code == 0 and "Applied 0 changes." in output

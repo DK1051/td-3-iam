@@ -107,3 +107,54 @@ def test_apply_writes_the_report_but_dry_run_does_not(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "BLOCKED joiner E2008: proofing incomplete - references_contacted" in out
     assert (reports / "blocked-joiners.md").exists()
+
+
+# ---- who asked and who approved must be real, current, different people -----------------------
+
+E2001 = ("E2001,joiner,Priya,Nambiar,priya.nambiar@mapleharbour.example,finance,Payments Officer,"
+         "E1001,2026-11-02,,E1001,E1002")
+
+
+def blocked_summary(tmp_path, who_requests, who_approves, setup=None):
+    feed = edited_feed(tmp_path, "feed-v2.csv", (E2001, E2001.rsplit(",E1001,E1002", 1)[0]
+                                                 + f",{who_requests},{who_approves}"))
+    _, accounts = load_v2()
+    fake = seeded_fake(ROLES)
+    if setup:
+        setup(fake)
+    plan = make_plan(fake, feed, accounts, ROLES)
+    return about(plan, "E2001")[0]
+
+
+def test_a_person_cannot_request_or_approve_their_own_access(tmp_path):
+    action = blocked_summary(tmp_path, "e2001", "E1002")
+    assert action.kind == "blocked" and "requester is the person themselves" in action.summary
+    action = blocked_summary(tmp_path, "E1001", "E2001")
+    assert action.kind == "blocked" and "approver is the person themselves" in action.summary
+
+
+def test_a_requester_or_approver_who_is_a_leaver_in_the_same_feed_blocks_the_row(tmp_path):
+    action = blocked_summary(tmp_path, "E4003", "E1002")
+    assert action.summary == "BLOCKED joiner E2001: requester E4003 has left"
+
+
+def test_a_requester_or_approver_who_is_disabled_or_unknown_blocks_the_row(tmp_path):
+    def disable_manager(fake):
+        fake.users[fake.get_user_by_username("e1002")["id"]]["enabled"] = False
+
+    action = blocked_summary(tmp_path, "E1001", "E1002", disable_manager)
+    assert action.summary == "BLOCKED joiner E2001: approver E1002 is disabled"
+    action = blocked_summary(tmp_path, "E7777", "E1002")
+    assert action.summary == "BLOCKED joiner E2001: requester E7777 is not in the directory"
+
+
+def test_the_sod_command_reports_the_same_reasons(tmp_path, capsys):
+    feed_path = tmp_path / "feed.csv"
+    feed_path.write_text((FIXTURES / "feed-v2.csv").read_text().replace(
+        E2001, E2001.rsplit(",E1001,E1002", 1)[0] + ",E7777,E1002"))
+    fake = seeded_fake(ROLES)
+    code = main(["sod", "--feed", str(feed_path), "--service-accounts",
+                 str(FIXTURES / "service-accounts-v2.csv"), "--realm", "maple-harbour"],
+                kc_factory=lambda realm: fake)
+    assert code == 1
+    assert "SOD-1  E2001: requester E7777 is not in the directory" in capsys.readouterr().out
