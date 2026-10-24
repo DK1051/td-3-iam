@@ -18,6 +18,7 @@ from lifecycle import sod
 from lifecycle.engine import State, UserState
 from lifecycle.expiry import expiry_flag
 from lifecycle.feed import Feed, ServiceAccount
+from lifecycle.mdtext import cell
 
 BOXES = "[ ] keep  [ ] revoke"
 QUARTER_PATTERN = re.compile(r"\d{4}-Q[1-4]")
@@ -53,8 +54,9 @@ def _people_rows(people, state: State) -> tuple[list[str], list[str]]:
         user = state.user(person.employee_id)
         title = user.attributes.get("job_title", "") if user else getattr(person, "job_title", "")
         groups = ", ".join(sorted(user.groups)) if user and user.groups else "-"
-        rows.append(f"| {person.employee_id} | {person.first_name} {person.last_name} | {title} | "
-                    f"{groups} | {_enabled_text(user)} | {BOXES} |")
+        rows.append(f"| {cell(person.employee_id)} | "
+                    f"{cell(person.first_name)} {cell(person.last_name)} | {cell(title)} | "
+                    f"{cell(groups)} | {_enabled_text(user)} | {BOXES} |")
         if user is None:
             warnings.append(f"{person.employee_id} has no account in the directory "
                             "(blocked by a control, or not created yet)")
@@ -69,8 +71,8 @@ def _account_rows(accounts: list[ServiceAccount], state: State, today: date):
                                                        else "disabled")
         flag = expiry_flag(account.expires_on, today)
         shown = f"{status}, {flag}" if flag else status
-        rows.append(f"| {account.client_id} | {account.purpose} | {account.expires_on.isoformat()} "
-                    f"| {shown} | {BOXES} |")
+        rows.append(f"| {cell(account.client_id)} | {cell(account.purpose)} | "
+                    f"{account.expires_on.isoformat()} | {shown} | {BOXES} |")
         if flag:
             warnings.append(f"{account.client_id}: {flag} (expires_on "
                             f"{account.expires_on.isoformat()})")
@@ -110,13 +112,13 @@ def build_attestation(feed: Feed, service_accounts: list[ServiceAccount], state:
             spelling.setdefault(account.owner.lower(), account.owner)
 
     files: dict[str, str] = {}
-    unassigned_staff: list[tuple[object, str]] = []
+    unassigned_staff: list[tuple[object, str, str]] = []
     for key in sorted(set(reports) | set(owned)):
         status = sod.person_status(spelling[key], leavers, state.users)
         manager_id = spelling[key]
         if status != "active":
             for person in reports.get(key, []):
-                unassigned_staff.append((person, f"manager {manager_id} {sod.PROBLEM_TEXT[status]}"))
+                unassigned_staff.append((person, sod.MANAGER_TEXT[status], manager_id))
             continue
         manager = state.user(manager_id)
         name = manager.name if manager and manager.name else manager_id
@@ -148,20 +150,21 @@ def build_attestation(feed: Feed, service_accounts: list[ServiceAccount], state:
         files[f"{manager_id}.md"] = "\n".join(lines)
 
     staff_rows = []
-    for person, why in sorted(unassigned_staff, key=lambda pair: pair[0].employee_id):
-        staff_rows.append(f"| {person.employee_id} | {person.first_name} {person.last_name} | "
-                          f"manager has left - reassign {person.employee_id} ({why}) |")
+    for person, what, manager_id in sorted(unassigned_staff, key=lambda item: item[0].employee_id):
+        staff_rows.append(f"| {cell(person.employee_id)} | "
+                          f"{cell(person.first_name)} {cell(person.last_name)} | "
+                          f"{what} - reassign {person.employee_id} (manager {manager_id}) |")
     account_rows = []
     for account, problem in sorted(unowned_accounts, key=lambda pair: pair[0].client_id):
         flag = expiry_flag(account.expires_on, today)
-        account_rows.append(f"| {account.client_id} | {account.purpose} | "
+        account_rows.append(f"| {cell(account.client_id)} | {cell(account.purpose)} | "
                             f"{account.expires_on.isoformat()} | {flag or '-'} | "
                             f"service account {problem} - SOD-3 |")
     for client in state.other_clients:
         problem = sod.owner_problem((client.get("attributes") or {}).get("owner", ""), leavers,
                                     state.users)
         if problem:
-            account_rows.append(f"| {client['clientId']} | (not in the CSV) | - | - | "
+            account_rows.append(f"| {cell(client['clientId'])} | (not in the CSV) | - | - | "
                                 f"service account {problem} - SOD-3 |")
     files["unassigned.md"] = "\n".join([
         f"# Unassigned - quarter {quarter}",
@@ -170,7 +173,7 @@ def build_attestation(feed: Feed, service_accounts: list[ServiceAccount], state:
         "",
         "Nobody can attest these lines until somebody takes responsibility. Reassign them.",
         "",
-        "## Staff whose manager has left or cannot be found",
+        "## Staff whose manager has left, is disabled, has not started or cannot be found",
         "",
         *_table("| Employee | Name | Reason |", staff_rows, "None."),
         "## Service accounts with no active owner",

@@ -9,6 +9,7 @@ version, which only listed joiners.)
 from pathlib import Path
 
 from lifecycle.engine import BLOCKED, Action
+from lifecycle.mdtext import cell
 
 BLOCKED_FILE = "blocked-joiners.md"
 
@@ -34,8 +35,8 @@ def write_blocked_report(actions: list[Action], directory: str | Path) -> Path:
         for action in section:
             d = action.details
             name = f"{d['first_name']} {d['last_name']}"
-            lines.append(f"| {action.target} | {name} | {d['department']} | {d['job_title']} | "
-                         f"{'; '.join(d['reasons'])} |")
+            lines.append(f"| {cell(action.target)} | {cell(name)} | {cell(d['department'])} | "
+                         f"{cell(d['job_title'])} | {cell('; '.join(d['reasons']))} |")
         lines.append("")
     unreadable = sorted((a for a in actions if a.kind == BLOCKED
                          and a.details.get("row") == "unreadable"),
@@ -48,7 +49,7 @@ def write_blocked_report(actions: list[Action], directory: str | Path) -> Path:
         lines += ["| File | Line | Who | Problem |", "|---|---|---|---|"]
         for action in unreadable:
             d = action.details
-            lines.append(f"| {d['source']} | {d['line']} | {d['who']} | {d['reason']} |")
+            lines.append(f"| {d['source']} | {d['line']} | {cell(d['who'])} | {cell(d['reason'])} |")
         lines.append("")
     path = Path(directory) / BLOCKED_FILE
     path.parent.mkdir(parents=True, exist_ok=True)

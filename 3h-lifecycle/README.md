@@ -96,8 +96,12 @@ Other rules that came out of design decisions:
   never switched back on.
 - A leaver is disabled **now**, even if their end date is still in the future. The plan says `leaves on <date>`
   or `left <date>`. This fails safe: better to cut access early than late.
-- Disabling a person also **ends their sessions and revokes their offline tokens**, and it does this *before*
-  writing the `disabled_on` marker, so a half-finished job is simply redone by the next run.
+- Disabling a person also **ends their sessions and revokes their offline tokens**. A half-finished job is redone by
+  the next run on both paths. For a **leaver** the `disabled_on` marker is written *last*, so if a step fails the marker
+  is missing and the next run does everything again. For a joiner switched off **before their start date** the
+  `pending_start` marker is written in the *same step* as the switch-off (so the account can never be off but unmarked),
+  and if a session or offline token survives, the next run sees a disabled, marked account with something still live
+  and ends it again; on or after the start date the account is enabled as usual.
 - A service account whose expiry date has passed is created **disabled**, or switched to disabled if it was
   enabled. The plan shows `expired on <date>`. The engine **never switches a disabled service account back
   on**, even if the owner extends the expiry date: it may have been disabled by an administrator or by the engine, so
@@ -107,8 +111,9 @@ Other rules that came out of design decisions:
   accounts. If one action fails (for example creating a joiner), the error is recorded and the rest still run, so a
   failure can never keep a leaver's access alive. `apply` then exits with code 4.
 - A mover or leaver with no account in Keycloak is reported as `SKIPPED unknown user <employee id>`.
-- Staff whose manager has left, is disabled, has not started or cannot be found get a
-  `WARNING manager has left - reassign <employee id>` line in `plan`, and appear in `unassigned.md`.
+- Staff whose manager has left, is disabled, has not started or cannot be found get a warning in `plan` and appear in
+  `unassigned.md`, worded after the real reason: `manager has left - reassign <employee id>`,
+  `manager has not started yet - reassign …` or `manager not found - reassign …`.
 - Anyone who gains the `privileged` group has `PRIVILEGED` at the end of their plan line.
 - The Keycloak username is the lower-case employee id, which does not change when a name changes.
 
@@ -118,7 +123,7 @@ Other rules that came out of design decisions:
 their direct reports (job title, groups, enabled or not) and a table of the service accounts they own (purpose,
 expiry, status), every row with `[ ] keep  [ ] revoke`, and a **Warnings** list. A service account is flagged
 `EXPIRES SOON` when it expires within 30 days of "today" and `EXPIRED` once the date has passed. Staff of a manager who
-left, and service accounts without an active owner, go to `unassigned.md`, because nobody can attest them yet.
+has left, is disabled, has not started or cannot be found, and service accounts without an active owner, go to `unassigned.md`, because nobody can attest them yet.
 An example: [reports/attestation/E1001.md](reports/attestation/E1001.md). The engine never acts on the ticks; a
 person does. An owner of a service account who is not a manager also gets a file.
 
@@ -212,8 +217,11 @@ Eojin decided:
 - A joiner with a future start date is created **disabled until the start date**, using an engine-owned marker.
   (This changes the original T3-S02 criterion "6 joiners enabled".)
 - The engine may only change groups listed in `managed_groups`, including retired ones.
-- An ownerless service account, or one whose owner left, is never created and an existing one is disabled; staff whose
+- An ownerless service account, or one whose owner left, is never created and an existing one is disabled; it
+  stays off until a person re-enables it after naming an active owner (the engine never re-enables). Staff whose
   manager left go to `unassigned.md`.
+- A malformed row blocks only itself (`BLOCKED row <n> …`, listed in the report) and every other row still runs; only
+  structural problems (unreadable file, wrong columns, duplicate ids) stop the whole run.
 
 Eojin's still to do: act as one manager with an attestation file, write down in his own words what each SoD rule
 prevents at a credit union, and write two feed rows (one mover, one leaver) for the class.
@@ -232,10 +240,10 @@ $ ruff check .
 All checks passed!
 
 $ KC_URL=http://localhost:9 pytest -q     # Keycloak unreachable: the Keycloak tests are skipped
-133 passed, 21 skipped in 0.54s
+138 passed, 21 skipped in 0.51s
 
 $ pytest -q -m keycloak                    # Keycloak up
-21 passed, 133 deselected in 131.14s (0:02:11)
+21 passed, 138 deselected in 131.08s (0:02:11)
 ```
 
 What the Keycloak tests prove against the real server: a leaver's normal and offline login tokens work before `apply`

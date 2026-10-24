@@ -4,7 +4,7 @@
 
 Nobody can attest these lines until somebody takes responsibility. Reassign them.
 
-## Staff whose manager has left or cannot be found
+## Staff whose manager has left, is disabled, has not started or cannot be found
 
 None.
 

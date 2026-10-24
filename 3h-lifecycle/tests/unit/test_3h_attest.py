@@ -166,3 +166,40 @@ def test_a_malformed_quarter_is_refused(tmp_path, capsys):
                  str(FIXTURES / "service-accounts-v1.csv"), "--realm", "maple-harbour",
                  "--quarter", "Q4-2026", "--out", str(tmp_path)], kc_factory=lambda realm: fake)
     assert code == 2 and "2026-Q4" in capsys.readouterr().err
+
+
+def test_a_manager_whose_only_report_is_a_leaver_still_gets_their_own_file(tmp_path):
+    feed = edited_feed(tmp_path, "feed-v2.csv",
+                       ("IT Administrator,E1002,,2026-10-21", "IT Administrator,E1005,,2026-10-21"))
+    _, accounts = load_v2()
+    fake = seeded_fake(ROLES)
+    fake.seed_user("e1005", ["it"])                       # a manager who is in no other row
+    engine.apply(make_plan(fake, feed, accounts, ROLES), fake)
+    files = build(feed, accounts, fake)
+    assert "E1005.md" in files
+    row = [line for line in table_rows(files["E1005.md"]) if "E4003" in line]
+    assert row and "no (disabled 2026-10-21)" in row[0]       # the leaver, listed as disabled
+    assert "E4003" not in files["unassigned.md"]
+
+
+def test_unassigned_wording_matches_the_real_reason(tmp_path):
+    feed = edited_feed(tmp_path, "feed-v2.csv",
+                       ("Payments Officer,E1001,2026-11-02", "Payments Officer,E7777,2026-11-02"),
+                       ("Teller,E1001,2026-11-02", "Teller,E2003,2026-11-02"))
+    _, accounts = load_v2()
+    fake = applied_directory(*load_v2())                   # E2003 now exists but has not started
+    text = build(feed, accounts, fake)["unassigned.md"]
+    assert "manager not found - reassign E2001 (manager E7777)" in text
+    assert "manager has not started yet - reassign E2002 (manager E2003)" in text
+
+
+def test_a_pipe_in_csv_text_cannot_break_a_table_row(tmp_path):
+    accounts_path = tmp_path / "sa.csv"
+    accounts_path.write_text("client_id,owner,purpose,expires_on\n"
+                             "svc-a,E1001,Report | export,2027-06-30\n")
+    feed, _ = load_v2()
+    fake = applied_directory(feed, load_v2()[1])
+    files = build(feed, load_service_accounts(accounts_path), fake)
+    row = next(line for line in table_rows(files["E1001.md"]) if line.startswith("| svc-a"))
+    assert "Report \\| export" in row
+    assert row.replace("\\|", "").count("|") == 6        # five cells -> six separators

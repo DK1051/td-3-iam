@@ -1,5 +1,7 @@
 """When the engine disables a person it also ends their sessions and revokes offline tokens."""
 
+from datetime import date
+
 from fake_keycloak import seeded_fake
 from support import FIXTURES, LATER, ROLES_MAP, TODAY, about, load_v2, make_plan
 
@@ -161,3 +163,34 @@ def test_a_leaver_whose_account_is_off_but_whose_token_survives_is_cleaned_up():
     assert [a.kind for a in again] == ["disable_user"]
     engine.apply(again, fake)
     assert about(make_plan(fake, feed, accounts, ROLES), "E4001") == []
+
+
+def test_failed_logout_during_the_pre_start_disable_is_retried_and_the_account_starts_later():
+    feed, accounts = load_v2()
+    fake = seeded_fake(ROLES)
+    fake.seed_user("e2001", ["finance", "payments-initiate"],
+                   attributes={"employee_id": "E2001", "department": "finance",
+                               "job_title": "Payments Officer", "manager_id": "E1001"})
+    fake.give_access("e2001")                              # enabled before its start date
+    original = fake.end_user_sessions
+
+    def broken(user_id):
+        raise KeycloakError("POST /admin/realms/maple-harbour/users/{id}/logout -> HTTP 500")
+
+    fake.end_user_sessions = broken
+    result = engine.apply(make_plan(fake, feed, accounts, ROLES), fake)
+    assert ("disable_user", "E2001") in [failure[:2] for failure in result.failures]
+    stranded = fake.get_user_by_username("e2001")
+    # Off AND already marked, even though the logout failed: it cannot be left half-way.
+    assert stranded["enabled"] is False and stranded["attributes"]["pending_start"] == "2026-11-02"
+
+    retry = about(make_plan(fake, feed, accounts, ROLES), "E2001")
+    assert [a.kind for a in retry] == ["end_sessions"]      # the next run finishes the job
+    fake.end_user_sessions = original
+    engine.apply(retry, fake)
+    assert about(make_plan(fake, feed, accounts, ROLES), "E2001") == []   # idempotent now
+
+    on_the_day = about(make_plan(fake, feed, accounts, ROLES, today=date(2026, 11, 2)), "E2001")
+    assert [a.kind for a in on_the_day] == ["enable_user"]
+    engine.apply(on_the_day, fake)
+    assert fake.get_user_by_username("e2001")["enabled"] is True

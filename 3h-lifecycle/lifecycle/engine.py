@@ -181,6 +181,7 @@ def read_state(kc, feed: Feed, service_accounts: list[ServiceAccount]) -> State:
     ids = [person.employee_id for person in [*movers_and_joiners, *feed.leavers]]
     for person in movers_and_joiners:
         ids += [person.manager_id, person.requested_by, person.approved_by]
+    ids += [leaver.manager_id for leaver in feed.leavers]     # so their manager can attest them
     ids += [account.owner for account in service_accounts if account.owner]
 
     listed = {account.client_id for account in service_accounts}
@@ -494,10 +495,22 @@ def _plan_joiners(feed: Feed, state: State, roles_map: RolesMap, wanted_by_perso
             actions.append(Action(
                 kind=DISABLE_USER, target=joiner.employee_id,
                 summary=f"{username_for(joiner.employee_id)}: disable until start {starts}",
-                details={"user_id": user.id, "attributes": {PENDING_START: starts}},
+                # marker_first: the marker is written together with the switch-off, so a failed
+                # logout cannot leave the account off but without its marker.
+                details={"user_id": user.id, "attributes": {PENDING_START: starts},
+                         "marker_first": True},
             ))
         extra = None
         if waiting_for_start:
+            if user.live_access:
+                # A session or offline token from before the switch-off survived (for example a
+                # logout failed last time): end it again. Nothing live means no action.
+                actions.append(Action(
+                    kind=END_SESSIONS, target=joiner.employee_id,
+                    summary=(f"{username_for(joiner.employee_id)}: end sessions "
+                             f"(account waits for its start date {starts})"),
+                    details={"user_id": user.id},
+                ))
             if joiner.start_date <= today:
                 when = "starts today" if joiner.start_date == today else f"started {starts}"
                 actions.append(Action(
@@ -521,11 +534,9 @@ def _plan_manager_warnings(feed: Feed, state: State, leaver_ids: set[str]) -> li
         status = sod.person_status(person.manager_id, leaver_ids, state.users)
         if status == "active":
             continue
-        what = {sod.LEFT: "has left", sod.DISABLED: "has left", sod.PENDING: "has not started yet",
-                sod.UNKNOWN: "not found"}[status]
         actions.append(Action(
             kind=WARNING, target=person.employee_id,
-            summary=(f"WARNING manager {what} - reassign {person.employee_id} "
+            summary=(f"WARNING {sod.MANAGER_TEXT[status]} - reassign {person.employee_id} "
                      f"(manager {person.manager_id})"),
             details={"manager_id": person.manager_id, "status": status},
         ))
@@ -548,8 +559,8 @@ def _plan_service_account(account: ServiceAccount, client: dict | None, today: d
         if client["enabled"]:
             return [Action(
                 kind=UPDATE_CLIENT, target=account.client_id,
-                summary=f"{account.client_id}: disable ({reason}); stays off until someone "
-                        "takes ownership",
+                summary=f"{account.client_id}: disable ({reason}); stays off until "
+                        "a person re-enables it after naming an active owner",
                 details={"client_uuid": client["id"], "enabled": False,
                          "attributes": {DISABLED_FOR_SOD3: "SOD-3 no active owner"}},
             )]
@@ -650,12 +661,19 @@ def _carry_out(action: Action, kc, group_ids: dict[str, str]) -> bool:
     elif action.kind == DISABLE_USER:
         # Switch the account off, then end every session and offline token (disabling alone
         # leaves them in place, and they work again if the account is ever re-enabled).
-        # The marker attribute is written LAST: if a step fails, the marker is missing, so
-        # the next plan sees unfinished work and does all the steps again.
-        kc.update_user(d["user_id"], enabled=False)
-        kc.end_user_sessions(d["user_id"])
-        kc.revoke_offline_tokens(d["user_id"])
-        kc.update_user(d["user_id"], attributes=d["attributes"])
+        # For a leaver the marker (disabled_on) is written LAST: if a step fails it is missing,
+        # so the next plan sees unfinished work and does all the steps again. For the pre-start
+        # disable the marker (pending_start) goes in the SAME call as the switch-off, and the next
+        # plan notices a live session or offline token on that account and ends it again.
+        if d.get("marker_first"):
+            kc.update_user(d["user_id"], enabled=False, attributes=d["attributes"])
+            kc.end_user_sessions(d["user_id"])
+            kc.revoke_offline_tokens(d["user_id"])
+        else:
+            kc.update_user(d["user_id"], enabled=False)
+            kc.end_user_sessions(d["user_id"])
+            kc.revoke_offline_tokens(d["user_id"])
+            kc.update_user(d["user_id"], attributes=d["attributes"])
     elif action.kind == END_SESSIONS:
         kc.end_user_sessions(d["user_id"])
         kc.revoke_offline_tokens(d["user_id"])

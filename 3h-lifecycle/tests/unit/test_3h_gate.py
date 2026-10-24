@@ -230,3 +230,12 @@ def test_structural_problems_still_stop_the_whole_run(tmp_path, capsys):
     fake, code = run_apply(tmp_path, text + text.splitlines()[1] + "\n")      # duplicate E2001
     assert code == 2 and "more than once" in capsys.readouterr().err
     assert fake.writes == []
+
+
+def test_a_pipe_in_a_name_cannot_break_the_blocked_report_table(tmp_path):
+    feed = edited_feed(tmp_path, "feed-v2.csv", (",Yusuf,Karimi,", ",Yu|suf,Karimi,"))
+    _, accounts = load_v2()
+    plan = make_plan(seeded_fake(ROLES), feed, accounts, ROLES)
+    text = write_blocked_report(plan, tmp_path / "r").read_text(encoding="utf-8")
+    row = next(line for line in text.splitlines() if line.startswith("| E2007"))
+    assert "Yu\\|suf Karimi" in row and row.replace("\\|", "").count("|") == 6

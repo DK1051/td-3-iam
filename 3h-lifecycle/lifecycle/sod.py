@@ -34,6 +34,15 @@ PROBLEM_TEXT = {
 }
 
 
+# How a staff member's manager problem is worded in the plan and in unassigned.md.
+MANAGER_TEXT = {
+    LEFT: "manager has left",
+    DISABLED: "manager has left",     # a disabled account is treated as a manager who is gone
+    PENDING: "manager has not started yet",
+    UNKNOWN: "manager not found",
+}
+
+
 class SodError(Exception):
     """sod-rules.yaml is not the file the program expects."""
 
