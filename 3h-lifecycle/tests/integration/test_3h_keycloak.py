@@ -15,6 +15,7 @@ import io
 import os
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -37,6 +38,8 @@ LATER = date(2026, 11, 20)
 CLI_ARGS = ["--feed", str(FEED), "--service-accounts", str(ACCOUNTS),
             "--realm", "maple-harbour", "--today", "2026-10-22"]
 LATER_ARGS = [*CLI_ARGS[:-1], "2026-11-20"]
+# `apply` writes blocked-joiners.md; keep that out of the repository.
+REPORTS = ["--reports-dir", tempfile.mkdtemp(prefix="lifecycle-reports-")]
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +50,7 @@ def first_apply():
                    stdout=subprocess.DEVNULL)
     printed = io.StringIO()
     with contextlib.redirect_stdout(printed):
-        code = main(["apply", *CLI_ARGS])
+        code = main(["apply", *CLI_ARGS, *REPORTS])
     assert code == 0
     return printed.getvalue()
 
@@ -57,7 +60,7 @@ def after_start(first_apply):
     """Apply again on 2026-11-20, after every joiner's start date. Changes Keycloak."""
     printed = io.StringIO()
     with contextlib.redirect_stdout(printed):
-        code = main(["apply", *LATER_ARGS])
+        code = main(["apply", *LATER_ARGS, *REPORTS])
     assert code == 0
     return printed.getvalue()
 
@@ -139,7 +142,7 @@ def test_plan_after_apply_is_empty(first_apply, kc):
 
 
 def test_applying_again_before_the_start_date_changes_nothing(first_apply, kc, capsys):
-    assert main(["apply", *CLI_ARGS]) == 0
+    assert main(["apply", *CLI_ARGS, *REPORTS]) == 0
     assert "Applied 0 changes." in capsys.readouterr().out
     feed = load_feed(FEED)
     accounts = load_service_accounts(ACCOUNTS)
@@ -168,5 +171,5 @@ def test_plan_is_empty_after_the_start_dates_and_a_further_apply_does_nothing(
     state = engine.read_state(kc, feed, accounts)
     roles_map = engine.load_roles_map(ROOT / "roles-map.yaml")
     assert engine.plan(feed, accounts, roles_map, state, LATER) == []
-    assert main(["apply", *LATER_ARGS]) == 0
+    assert main(["apply", *LATER_ARGS, *REPORTS]) == 0
     assert "Applied 0 changes." in capsys.readouterr().out

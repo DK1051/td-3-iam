@@ -3,6 +3,9 @@
 [tool.pytest.ini_options]
 testpaths = ["3h-lifecycle/tests"]
 pythonpath = ["3h-lifecycle"]
+# A roles-map note about the payments-ops demo pair is expected; tests that check it use
+# pytest.warns, which still sees it.
+filterwarnings = ["ignore::lifecycle.engine.RolesMapWarning"]
 markers = [
     "keycloak: needs a running Keycloak at localhost:8080",
 ]

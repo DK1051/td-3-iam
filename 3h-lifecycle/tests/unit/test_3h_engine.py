@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from fake_keycloak import FakeKeycloak
+from fake_keycloak import FakeKeycloak, seeded_fake
 
 from lifecycle import engine
 from lifecycle.__main__ import main
@@ -37,20 +37,9 @@ def accounts():
 
 
 def new_fake(roles_map, *, with_staff):
-    """A fake realm with the groups from roles-map.yaml; optionally the 6 pre-existing staff."""
-    fake = FakeKeycloak(group_names=sorted(roles_map.managed_groups))
-    if with_staff:
-        # The 3 movers in their OLD groups and the 3 leavers (still enabled).
-        fake.seed_user("e3001", ["member-services"],
-                       attributes={"department": "member-services", "job_title": "Teller"})
-        fake.seed_user("e3002", ["finance", "payments-initiate"],
-                       attributes={"department": "finance", "job_title": "Payments Officer"})
-        fake.seed_user("e3003", ["it", "helpdesk"],
-                       attributes={"department": "it", "job_title": "Helpdesk Analyst"})
-        fake.seed_user("e4001", ["finance", "payments-initiate"])
-        fake.seed_user("e4002", ["member-services"])
-        fake.seed_user("e4003", ["it", "privileged"])
-    return fake
+    """A fake realm with the groups from roles-map.yaml, the two managers and (with_staff) the
+    movers in their OLD groups and the leavers (still enabled)."""
+    return seeded_fake(roles_map, with_staff=with_staff)
 
 
 def make_plan(fake, feed, accounts, roles_map, today=TODAY):
@@ -112,10 +101,10 @@ def test_cli_apply_dry_run_behaves_like_plan(capsys, roles_map):
     assert code == 0 and "Applied" not in output and fake.writes == []
 
 
-def test_cli_apply_twice_second_run_changes_nothing(capsys, roles_map):
+def test_cli_apply_twice_second_run_changes_nothing(capsys, roles_map, tmp_path):
     fake = new_fake(roles_map, with_staff=True)
     args = ["apply", "--feed", str(FEED), "--service-accounts", str(ACCOUNTS),
-            "--realm", "maple-harbour", "--today", "2026-10-22"]
+            "--realm", "maple-harbour", "--today", "2026-10-22", "--reports-dir", str(tmp_path)]
     assert main(args, kc_factory=lambda realm: fake) == 0
     first = capsys.readouterr().out
     assert ("Applied: create_user=6, move_user=3, disable_user=3, create_client=4") in first
@@ -281,7 +270,7 @@ def test_fake_and_real_client_have_the_same_calls():
         assert name in fake, f"fake is missing {name}"
         assert list(fake[name].parameters) == list(signature.parameters), name
     extra = set(fake) - set(real)
-    assert extra <= {"seed_user", "group_names_of"}
+    assert extra <= {"seed_user", "group_names_of", "give_access"}
 
 
 def test_plan_flags_anyone_who_gains_the_privileged_group(feed, accounts, roles_map):

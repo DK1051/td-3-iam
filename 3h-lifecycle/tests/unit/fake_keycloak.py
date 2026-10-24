@@ -16,6 +16,8 @@ class FakeKeycloak:
         self.memberships: dict[str, set[str]] = {}  # user id -> set of group ids
         self.clients: dict[str, dict] = {}        # client uuid -> client record
         self.writes: list[tuple] = []
+        self.sessions: dict[str, int] = {}        # user id -> number of live sessions
+        self.consents: dict[str, list[str]] = {}  # user id -> clients holding a consent/token
         for name in group_names:
             self.groups[f"g-{next(self._ids)}"] = name
 
@@ -65,6 +67,35 @@ class FakeKeycloak:
         for name in remove_attributes or []:
             self.users[user_id]["attributes"].pop(name, None)
 
+    def give_access(self, username, sessions=1, offline_clients=("app",)):
+        """Test helper: pretend the user is logged in and holds offline tokens."""
+        user_id = self.get_user_by_username(username)["id"]
+        self.sessions[user_id] = sessions
+        self.consents[user_id] = list(offline_clients)
+
+    def user_sessions(self, user_id):
+        return [{"id": f"s-{i}"} for i in range(self.sessions.get(user_id, 0))]
+
+    def consent_clients(self, user_id):
+        return list(self.consents.get(user_id, []))
+
+    def end_user_sessions(self, user_id):
+        self.writes.append(("end_user_sessions", user_id))
+        self.sessions[user_id] = 0
+
+    def revoke_offline_tokens(self, user_id):
+        self.writes.append(("revoke_offline_tokens", user_id))
+        self.consents[user_id] = []
+
+    def group_members(self, group_id):
+        return [{"username": self.users[uid]["username"]}
+                for uid, members in self.memberships.items()
+                if group_id in members and uid in self.users]
+
+    def list_clients(self):
+        return [{**client, "attributes": dict(client["attributes"])}
+                for client in self.clients.values()]
+
     def list_groups(self):
         return [{"id": gid, "name": name} for gid, name in self.groups.items()]
 
@@ -100,3 +131,24 @@ class FakeKeycloak:
         if enabled is not None:
             self.clients[client_uuid]["enabled"] = enabled
         self.clients[client_uuid]["attributes"].update(attributes or {})
+
+
+def seeded_fake(roles_map, *, with_staff=True):
+    """A fake realm like the one keycloak-dev.sh builds: the groups of roles-map.yaml, the two
+    managers, and (with_staff) the movers in their OLD groups and the leavers, still enabled."""
+    fake = FakeKeycloak(group_names=sorted(roles_map.managed_groups))
+    fake.seed_user("e1001", ["finance", "payments-approve"])
+    fake.seed_user("e1002", ["it"])
+    if with_staff:
+        fake.seed_user("e3001", ["member-services"],
+                       attributes={"department": "member-services", "job_title": "Teller"})
+        fake.seed_user("e3002", ["finance", "payments-initiate"],
+                       attributes={"department": "finance", "job_title": "Payments Officer"})
+        fake.seed_user("e3003", ["it", "helpdesk"],
+                       attributes={"department": "it", "job_title": "Helpdesk Analyst"})
+        fake.seed_user("e3004", ["finance", "payments-initiate"],
+                       attributes={"department": "finance", "job_title": "Payments Officer"})
+        fake.seed_user("e4001", ["finance", "payments-initiate"])
+        fake.seed_user("e4002", ["member-services"])
+        fake.seed_user("e4003", ["it", "privileged"])
+    return fake

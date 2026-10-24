@@ -13,6 +13,7 @@ departments:
   finance: [finance]
   member-services: [member-services]
   it: [it]
+  payments-ops: [finance, payments-initiate]   # staff who start payments for the whole credit union
 
 job_titles:
   Payments Officer: [payments-initiate]   # can start (initiate) a payment
