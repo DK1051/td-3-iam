@@ -9,6 +9,14 @@ The engine is idempotent (safe to repeat): plan() only produces an action when K
 from the feed, so once apply() has run, a second plan() returns an empty list.
 
 Leavers are disabled, never deleted. There is no delete-user call anywhere in this program.
+
+Controls added in T3-S03 (see sod-rules.yaml and lifecycle/sod.py):
+  - proofing gate: a joiner is created only when all three identity checks are true, and no
+    joiner or mover row may have the same requester and approver (leaver rows are never blocked,
+    because blocking a leaver would keep their access alive);
+  - SOD-2: a person who would end up in both payments groups is skipped, nothing half-applied;
+  - SOD-3: a service account without an active owner is never created, and is disabled if it
+    already exists.
 """
 
 from collections import Counter
@@ -18,7 +26,8 @@ from pathlib import Path
 
 import yaml
 
-from lifecycle.feed import Feed, ServiceAccount
+from lifecycle import sod
+from lifecycle.feed import Feed, Joiner, ServiceAccount
 
 # The kinds of action. SKIPPED is only a report line: apply() never carries it out.
 CREATE_USER = "create_user"
@@ -28,6 +37,14 @@ ENABLE_USER = "enable_user"
 CREATE_CLIENT = "create_client"
 UPDATE_CLIENT = "update_client"
 SKIPPED = "skipped"
+BLOCKED = "blocked"   # a row the controls refuse (proofing gate, requester = approver, SOD-3)
+WARNING = "warning"   # something a person should look at (for example a manager who has left)
+REPORT_ONLY = (SKIPPED, BLOCKED, WARNING)  # lines in the plan that apply() never carries out
+
+# The three identity checks a joiner needs before an account is created.
+PROOFING_CHECKS = ("id_checked_live_video", "references_contacted", "education_verified")
+# Set on a service account the engine disabled because its owner is missing or gone (SOD-3).
+DISABLED_FOR_SOD3 = "disabled_by_engine"
 
 
 # Groups that give powerful access. The plan flags any person who gains one, so a reviewer
@@ -107,9 +124,14 @@ class UserState:
 
 @dataclass
 class State:
-    users: dict[str, UserState | None]   # key: employee id; None means "no such account"
+    # key: lower-case employee id (people in the feed, plus the managers and service-account
+    # owners they name); None means "no such account"
+    users: dict[str, UserState | None]
     clients: dict[str, dict | None]      # key: client id; None means "no such client"
     group_ids: dict[str, str]            # group name -> group id
+
+    def user(self, employee_id: str) -> UserState | None:
+        return self.users.get(employee_id.lower())
 
 
 def username_for(employee_id: str) -> str:
@@ -118,16 +140,23 @@ def username_for(employee_id: str) -> str:
 
 
 def read_state(kc, feed: Feed, service_accounts: list[ServiceAccount]) -> State:
-    """Look up (read-only) everything in Keycloak that the feed talks about."""
+    """Look up (read-only) everything in Keycloak that the feed talks about: the people in it,
+    the managers they name and the owners of the service accounts."""
     group_ids = {group["name"]: group["id"] for group in kc.list_groups()}
+    ids = [person.employee_id for person in [*feed.joiners, *feed.movers, *feed.leavers]]
+    ids += [person.manager_id for person in [*feed.joiners, *feed.movers]]
+    ids += [account.owner for account in service_accounts if account.owner]
     users: dict[str, UserState | None] = {}
-    for person in [*feed.joiners, *feed.movers, *feed.leavers]:
-        user = kc.get_user_by_username(username_for(person.employee_id))
+    for employee_id in ids:
+        key = employee_id.lower()
+        if key in users:
+            continue
+        user = kc.get_user_by_username(username_for(employee_id))
         if user is None:
-            users[person.employee_id] = None
+            users[key] = None
             continue
         groups = {group["name"] for group in kc.user_groups(user["id"])}
-        users[person.employee_id] = UserState(
+        users[key] = UserState(
             id=user["id"], enabled=user["enabled"],
             attributes=user.get("attributes", {}), groups=groups,
         )
@@ -152,6 +181,52 @@ def _person_attributes(person) -> dict[str, str]:
         "job_title": person.job_title,
         "manager_id": person.manager_id,
     }
+
+
+def projected_groups(feed: Feed, roles_map: RolesMap, state: State) -> dict[str, set[str]]:
+    """The groups each joiner and mover would have after the feed is applied: the groups the
+    engine does not manage stay as they are, the managed ones become exactly what the map says."""
+    result: dict[str, set[str]] = {}
+    for person in [*feed.joiners, *feed.movers]:
+        wanted = _wanted_groups(roles_map, person.employee_id, person.department,
+                                person.job_title)
+        user = state.user(person.employee_id)
+        kept = (user.groups - roles_map.managed_groups) if user else set()
+        result[person.employee_id] = kept | wanted
+    return result
+
+
+def _blocked_reasons(person) -> list[str]:
+    """Why the proofing gate refuses this joiner or mover row (empty list: it passes)."""
+    reasons = []
+    if isinstance(person, Joiner):
+        missing = [name for name in PROOFING_CHECKS if not getattr(person, name)]
+        if missing:
+            reasons.append("proofing incomplete - " + ", ".join(missing))
+    if sod.requester_equals_approver(person):
+        reasons.append("requester equals approver")
+    return reasons
+
+
+def _blocked_action(person, row: str, reasons: list[str]) -> Action:
+    return Action(
+        kind=BLOCKED, target=person.employee_id,
+        summary=f"BLOCKED {row} {person.employee_id}: " + "; ".join(reasons),
+        details={"row": row, "first_name": person.first_name, "last_name": person.last_name,
+                 "department": person.department, "job_title": person.job_title,
+                 "reasons": reasons},
+    )
+
+
+def _sod2_skip(person, row: str, groups: set[str]) -> Action | None:
+    """SOD-2 fails closed: nothing at all is applied to this person."""
+    if not sod.has_payment_conflict(groups):
+        return None
+    return Action(
+        kind=SKIPPED, target=person.employee_id,
+        summary=(f"SKIPPED {row} {person.employee_id}: SOD-2 would hold both "
+                 f"{sod.PAYMENTS_INITIATE} and {sod.PAYMENTS_APPROVE}; nothing applied"),
+    )
 
 
 def _describe_groups(add: set[str], remove: set[str]) -> str:
@@ -201,8 +276,19 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
         raise EngineError("group(s) not found in the realm: " + ", ".join(sorted(missing))
                           + " (run scripts/keycloak-dev.sh first)")
 
+    projected = projected_groups(feed, roles_map, state)
+    leaver_ids = sod.leaver_ids_of(feed)
+
     for joiner in feed.joiners:
-        user = state.users[joiner.employee_id]
+        reasons = _blocked_reasons(joiner)
+        if reasons:
+            actions.append(_blocked_action(joiner, "joiner", reasons))
+            continue
+        skip = _sod2_skip(joiner, "joiner", projected[joiner.employee_id])
+        if skip:
+            actions.append(skip)
+            continue
+        user = state.user(joiner.employee_id)
         wanted = wanted_by_person[joiner.employee_id]
         starts = joiner.start_date.isoformat()
         if user is None:
@@ -257,12 +343,20 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
             actions.append(move)
 
     for mover in feed.movers:
-        user = state.users[mover.employee_id]
+        reasons = _blocked_reasons(mover)
+        if reasons:
+            actions.append(_blocked_action(mover, "mover", reasons))
+            continue
+        user = state.user(mover.employee_id)
         if user is None:
             actions.append(Action(
                 kind=SKIPPED, target=mover.employee_id,
                 summary=f"SKIPPED unknown user {mover.employee_id}",
             ))
+            continue
+        skip = _sod2_skip(mover, "mover", projected[mover.employee_id])
+        if skip:
+            actions.append(skip)
             continue
         move = _plan_existing_user(mover, user, wanted_by_person[mover.employee_id], roles_map)
         if move:
@@ -272,7 +366,7 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
             actions.append(move)
 
     for leaver in feed.leavers:
-        user = state.users[leaver.employee_id]
+        user = state.user(leaver.employee_id)
         if user is None:
             actions.append(Action(
                 kind=SKIPPED, target=leaver.employee_id,
@@ -289,15 +383,50 @@ def plan(feed: Feed, service_accounts: list[ServiceAccount], roles_map: RolesMap
                 details={"user_id": user.id, "attributes": {"disabled_on": left_on}},
             ))
 
+    # Staff whose manager has left (or cannot be found) need a new manager.
+    for person in [*feed.joiners, *feed.movers]:
+        status = sod.person_status(person.manager_id, leaver_ids, state.users)
+        if status != sod.PENDING and status != "active":
+            what = "has left" if status in (sod.LEFT, sod.DISABLED) else "not found"
+            actions.append(Action(
+                kind=WARNING, target=person.employee_id,
+                summary=(f"WARNING manager {what} - reassign {person.employee_id} "
+                         f"(manager {person.manager_id})"),
+                details={"manager_id": person.manager_id, "status": status},
+            ))
+
     for account in service_accounts:
-        actions.extend(_plan_service_account(account, state.clients[account.client_id], today))
+        problem = sod.owner_problem(account.owner, leaver_ids, state.users)
+        actions.extend(_plan_service_account(account, state.clients[account.client_id], today,
+                                             problem))
     return actions
 
 
-def _plan_service_account(account: ServiceAccount, client: dict | None,
-                          today: date) -> list[Action]:
+def _plan_service_account(account: ServiceAccount, client: dict | None, today: date,
+                          owner_problem: str | None = None) -> list[Action]:
     """An account whose expiry date has passed is created or switched to disabled. A client that
-    is already disabled is never switched back on by the engine."""
+    is already disabled is never switched back on by the engine.
+
+    owner_problem (SOD-3): when set, the account has no active owner. It is then never created,
+    and an existing enabled one is disabled (with a marker saying the engine did it)."""
+    if owner_problem:
+        reason = f"SOD-3: {owner_problem}"
+        if client is None:
+            return [Action(kind=BLOCKED, target=account.client_id,
+                           summary=f"BLOCKED service account {account.client_id}: {reason}; "
+                                   "not created")]
+        if client["enabled"]:
+            return [Action(
+                kind=UPDATE_CLIENT, target=account.client_id,
+                summary=f"{account.client_id}: disable ({reason}); stays off until someone "
+                        "takes ownership",
+                details={"client_uuid": client["id"], "enabled": False,
+                         "attributes": {DISABLED_FOR_SOD3: "SOD-3 no active owner"}},
+            )]
+        return [Action(
+            kind=SKIPPED, target=account.client_id,
+            summary=f"SKIPPED already disabled {account.client_id} ({reason}; not re-enabled)",
+        )]
     expired = account.expires_on < today
     enabled = not expired
     attributes = {"owner": account.owner, "purpose": account.purpose,
@@ -369,13 +498,20 @@ def apply(actions: list[Action], kc) -> Counter:
         elif action.kind == ENABLE_USER:
             kc.update_user(d["user_id"], enabled=True, remove_attributes=d["remove_attributes"])
         elif action.kind == DISABLE_USER:
-            kc.update_user(d["user_id"], enabled=False, attributes=d["attributes"])
+            # Switch the account off, then end every session and offline token (disabling alone
+            # leaves them in place, and they work again if the account is ever re-enabled).
+            # The marker attribute is written LAST: if a step fails, the marker is missing, so
+            # the next plan sees unfinished work and does all the steps again.
+            kc.update_user(d["user_id"], enabled=False)
+            kc.end_user_sessions(d["user_id"])
+            kc.revoke_offline_tokens(d["user_id"])
+            kc.update_user(d["user_id"], attributes=d["attributes"])
         elif action.kind == CREATE_CLIENT:
             kc.create_client(action.target, enabled=d["enabled"], attributes=d["attributes"])
         elif action.kind == UPDATE_CLIENT:
             kc.update_client(d["client_uuid"], enabled=d["enabled"], attributes=d["attributes"])
         else:
-            continue  # SKIPPED lines are only reports
+            continue  # SKIPPED, BLOCKED and WARNING lines are only reports
         done[action.kind] += 1
     return done
 

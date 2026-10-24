@@ -4,8 +4,8 @@
 # It creates (and can safely be run again, because "already exists" is not an error):
 #   - the realm "maple-harbour" with custom user attributes allowed
 #   - the groups named in roles-map.yaml and the realm role "manager"
-#   - the eight fictional staff accounts that already exist before the HR feed runs:
-#     2 managers, 3 movers (in their OLD groups) and 3 leavers (still enabled)
+#   - the nine fictional staff accounts that already exist before the HR feed runs:
+#     2 managers, 4 movers (in their OLD groups) and 3 leavers (still enabled)
 #
 # Usage: keycloak-dev.sh [--reset]
 #   --reset  first DELETES the realm maple-harbour (local servers only), so you start clean.
@@ -100,7 +100,7 @@ GROUP_TABLE="$(kc get groups -r "$REALM" --fields id,name --format csv --noquote
 create_if_missing "realm role manager" lenient create roles -r "$REALM" -s name=manager \
   -s 'description=Appears as somebody'"'"'s manager in the HR feed (seeded here only)'
 
-# The pre-existing staff.
+# The pre-existing staff (E3004 holds payments-initiate and moves to a role that approves payments).
 # employee id|first|last|department|job title|manager id|groups|manager role
 # The Keycloak username is the employee id in lower case; emails are fictional.
 SEED_USERS='
@@ -109,6 +109,7 @@ E1002|Samuel|Adeyemi|it|IT Manager||it|yes
 E3001|Aisha|Rahman|member-services|Teller|E1001|member-services|no
 E3002|Jonas|Weber|finance|Payments Officer|E1001|finance,payments-initiate|no
 E3003|Mei-Lin|Wong|it|Helpdesk Analyst|E1002|it,helpdesk|no
+E3004|Nadia|Petrov|finance|Payments Officer|E1001|finance,payments-initiate|no
 E4001|Oliver|Grant|finance|Payments Officer|E1001|finance,payments-initiate|no
 E4002|Fatima|Haddad|member-services|Teller|E1001|member-services|no
 E4003|Dmitri|Kovac|it|IT Administrator|E1002|it,privileged|no

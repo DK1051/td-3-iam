@@ -1,0 +1,29 @@
+# sod-rules.yaml - the three separation-of-duties (SoD) rules the engine enforces.
+#
+# Separation of duties means no single person (or unowned program) can do something risky
+# alone. In a credit union the risky thing is moving money: one person must not be able to
+# both start a payment and approve it.
+#
+# "check" names the test in lifecycle/sod.py that implements the rule. There must be exactly
+# these three rules; lifecycle/sod.py refuses to load the file otherwise.
+rules:
+  - id: SOD-1
+    title: The requester is not the approver
+    plain_english: >
+      Whoever asks for an access change must not be the same person who approves it, so nobody
+      can grant themselves (or a friend) access alone.
+    check: requester-not-approver
+
+  - id: SOD-2
+    title: No one both starts and approves payments
+    plain_english: >
+      Nobody may be in both the payments-initiate and the payments-approve group. Otherwise one
+      person could create a payment and approve it, with no second pair of eyes.
+    check: no-initiate-and-approve
+
+  - id: SOD-3
+    title: Every service account has an active owner
+    plain_english: >
+      A service account (an account used by a program) must name an owner who is a current,
+      enabled employee. A program nobody answers for is how forgotten access survives for years.
+    check: service-account-has-active-owner

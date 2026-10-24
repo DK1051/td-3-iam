@@ -116,17 +116,36 @@ class KeycloakClient:
     def update_user(self, user_id: str, *, enabled: bool | None = None,
                     attributes: dict | None = None,
                     remove_attributes: list[str] | None = None) -> None:
-        """Change the enabled flag, set attributes and/or remove some; others are kept."""
+        """Change the enabled flag, set attributes and/or remove some.
+
+        Only the attributes named here are touched. Every other attribute is sent back to
+        Keycloak exactly as Keycloak returned it (including attributes with several values).
+        """
         path = self._admin(f"/users/{user_id}")
         user = self._request("GET", path).json()
         if enabled is not None:
             user["enabled"] = enabled
-        merged = _one_value_each(user.get("attributes"))
-        merged.update(attributes or {})
+        stored = dict(user.get("attributes") or {})  # name -> list of values, untouched
+        for name, value in (attributes or {}).items():
+            stored[name] = [value]
         for name in remove_attributes or []:
-            merged.pop(name, None)
-        user["attributes"] = {name: [value] for name, value in merged.items()}
+            stored.pop(name, None)
+        user["attributes"] = stored
         self._request("PUT", path, body=user, ok=(204,))
+
+    def end_user_sessions(self, user_id: str) -> None:
+        """Log the user out everywhere (POST .../users/{id}/logout). Keycloak also refuses
+        every ordinary refresh token issued before now. It does NOT remove offline tokens."""
+        self._request("POST", self._admin(f"/users/{user_id}/logout"), ok=(204,))
+
+    def revoke_offline_tokens(self, user_id: str) -> None:
+        """Remove the user's offline tokens (long-lived refresh tokens that survive a logout).
+        GET .../users/{id}/consents lists the clients holding one ("Offline Token"); DELETE
+        .../users/{id}/consents/{clientId} revokes them. This also withdraws any consent."""
+        grants = self._request("GET", self._admin(f"/users/{user_id}/consents")).json()
+        for grant in grants:
+            self._request("DELETE", self._admin(f"/users/{user_id}/consents/{grant['clientId']}"),
+                          ok=(204,))
 
     # ---- groups ---------------------------------------------------------------------------
 

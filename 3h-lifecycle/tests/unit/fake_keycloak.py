@@ -65,6 +65,12 @@ class FakeKeycloak:
         for name in remove_attributes or []:
             self.users[user_id]["attributes"].pop(name, None)
 
+    def end_user_sessions(self, user_id):
+        self.writes.append(("end_user_sessions", user_id))
+
+    def revoke_offline_tokens(self, user_id):
+        self.writes.append(("revoke_offline_tokens", user_id))
+
     def list_groups(self):
         return [{"id": gid, "name": name} for gid, name in self.groups.items()]
 
@@ -100,3 +106,24 @@ class FakeKeycloak:
         if enabled is not None:
             self.clients[client_uuid]["enabled"] = enabled
         self.clients[client_uuid]["attributes"].update(attributes or {})
+
+
+def seeded_fake(roles_map, *, with_staff=True):
+    """A fake realm like the one keycloak-dev.sh builds: the groups of roles-map.yaml, the two
+    managers, and (with_staff) the movers in their OLD groups and the leavers, still enabled."""
+    fake = FakeKeycloak(group_names=sorted(roles_map.managed_groups))
+    fake.seed_user("e1001", ["finance", "payments-approve"])
+    fake.seed_user("e1002", ["it"])
+    if with_staff:
+        fake.seed_user("e3001", ["member-services"],
+                       attributes={"department": "member-services", "job_title": "Teller"})
+        fake.seed_user("e3002", ["finance", "payments-initiate"],
+                       attributes={"department": "finance", "job_title": "Payments Officer"})
+        fake.seed_user("e3003", ["it", "helpdesk"],
+                       attributes={"department": "it", "job_title": "Helpdesk Analyst"})
+        fake.seed_user("e3004", ["finance", "payments-initiate"],
+                       attributes={"department": "finance", "job_title": "Payments Officer"})
+        fake.seed_user("e4001", ["finance", "payments-initiate"])
+        fake.seed_user("e4002", ["member-services"])
+        fake.seed_user("e4003", ["it", "privileged"])
+    return fake

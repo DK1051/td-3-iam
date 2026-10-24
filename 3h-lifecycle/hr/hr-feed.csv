@@ -11,3 +11,8 @@ E3003,mover,Mei-Lin,Wong,meilin.wong@mapleharbour.example,it,IT Administrator,E1
 E4001,leaver,Oliver,Grant,oliver.grant@mapleharbour.example,finance,Payments Officer,E1001,,2026-10-16,E1001,E1002,,,
 E4002,leaver,Fatima,Haddad,fatima.haddad@mapleharbour.example,member-services,Teller,E1001,,2026-10-09,E1001,E1002,,,
 E4003,leaver,Dmitri,Kovac,dmitri.kovac@mapleharbour.example,it,IT Administrator,E1002,,2026-10-21,E1002,E1001,,,
+E2007,joiner,Yusuf,Karimi,yusuf.karimi@mapleharbour.example,finance,Payments Officer,E1001,2026-11-23,,E1001,E1002,false,true,true
+E2008,joiner,Ingrid,Solberg,ingrid.solberg@mapleharbour.example,member-services,Teller,E1001,2026-11-23,,E1001,E1002,true,false,true
+E2009,joiner,Mateo,Vargas,mateo.vargas@mapleharbour.example,it,Helpdesk Analyst,E1002,2026-11-30,,E1002,E1001,true,true,false
+E2010,joiner,Chloe,Gagnon,chloe.gagnon@mapleharbour.example,member-services,Member Service Representative,E1001,2026-11-30,,E1001,E1001,true,true,true
+E3004,mover,Nadia,Petrov,nadia.petrov@mapleharbour.example,payments-ops,Finance Manager,E1001,2026-10-26,,E1002,E1001,,,

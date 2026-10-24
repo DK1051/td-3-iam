@@ -52,6 +52,8 @@ class Mover:
     department: str
     job_title: str
     manager_id: str
+    requested_by: str
+    approved_by: str
 
 
 @dataclass(frozen=True)
@@ -65,7 +67,8 @@ class Leaver:
 
 @dataclass(frozen=True)
 class ServiceAccount:
-    """An account used by a program, with a named owner, a purpose and an expiry date."""
+    """An account used by a program, with a named owner, a purpose and an expiry date.
+    owner is "" when the CSV leaves it empty; the engine never creates such an account (SOD-3)."""
     client_id: str
     owner: str
     purpose: str
@@ -187,6 +190,8 @@ def load_feed(path: str | Path) -> Feed:
                 department=row.text("department"),
                 job_title=row.text("job_title"),
                 manager_id=row.identifier("manager_id"),
+                requested_by=row.identifier("requested_by"),
+                approved_by=row.identifier("approved_by"),
             ))
         elif action == "leaver":
             for column in ("id_checked_live_video", "references_contacted", "education_verified"):
@@ -213,7 +218,7 @@ def load_service_accounts(path: str | Path) -> list[ServiceAccount]:
         seen.add(client_id.lower())
         accounts.append(ServiceAccount(
             client_id=client_id,
-            owner=row.identifier("owner"),
+            owner=row.identifier("owner") if row.values["owner"].strip() else "",
             purpose=row.text("purpose"),
             expires_on=row.day("expires_on"),
         ))

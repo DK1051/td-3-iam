@@ -127,3 +127,43 @@ def test_create_client_asks_for_a_service_account_with_no_browser_login():
     assert sent["body"] == {"clientId": "svc-x", "enabled": False, "serviceAccountsEnabled": True,
                             "publicClient": False, "standardFlowEnabled": False,
                             "attributes": {"owner": "E1001"}}
+
+
+def test_update_keeps_attributes_it_does_not_manage_exactly_as_stored():
+    sent = {}
+    stored = {"department": ["it"], "keep_me": ["first", "second"], "pending_start": ["2026-11-02"]}
+
+    def handler(request):
+        if request.url.path.endswith("/openid-connect/token"):
+            return token_response()
+        if request.method == "GET":
+            return httpx.Response(200, json={"id": USER_ID, "enabled": True,
+                                             "attributes": stored})
+        sent["body"] = json.loads(request.content)
+        return httpx.Response(204)
+
+    kc = client_with(handler)
+    kc.update_user(USER_ID, enabled=False, attributes={"disabled_on": "2026-10-16"},
+                   remove_attributes=["pending_start"])
+    assert sent["body"]["attributes"] == {"department": ["it"], "keep_me": ["first", "second"],
+                                          "disabled_on": ["2026-10-16"]}
+    assert sent["body"]["enabled"] is False
+
+
+def test_end_sessions_and_revoke_offline_tokens_use_the_confirmed_endpoints():
+    seen = []
+
+    def handler(request):
+        if request.url.path.endswith("/openid-connect/token"):
+            return token_response()
+        seen.append((request.method, request.url.path))
+        if request.method == "GET":
+            return httpx.Response(200, json=[{"clientId": "app-one"}, {"clientId": "app-two"}])
+        return httpx.Response(204)
+
+    kc = client_with(handler)
+    kc.end_user_sessions(USER_ID)
+    kc.revoke_offline_tokens(USER_ID)
+    base = f"/admin/realms/maple-harbour/users/{USER_ID}"
+    assert seen == [("POST", f"{base}/logout"), ("GET", f"{base}/consents"),
+                    ("DELETE", f"{base}/consents/app-one"), ("DELETE", f"{base}/consents/app-two")]

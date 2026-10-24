@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from fake_keycloak import FakeKeycloak
+from fake_keycloak import FakeKeycloak, seeded_fake
 
 from lifecycle import engine
 from lifecycle.__main__ import main
@@ -37,20 +37,9 @@ def accounts():
 
 
 def new_fake(roles_map, *, with_staff):
-    """A fake realm with the groups from roles-map.yaml; optionally the 6 pre-existing staff."""
-    fake = FakeKeycloak(group_names=sorted(roles_map.managed_groups))
-    if with_staff:
-        # The 3 movers in their OLD groups and the 3 leavers (still enabled).
-        fake.seed_user("e3001", ["member-services"],
-                       attributes={"department": "member-services", "job_title": "Teller"})
-        fake.seed_user("e3002", ["finance", "payments-initiate"],
-                       attributes={"department": "finance", "job_title": "Payments Officer"})
-        fake.seed_user("e3003", ["it", "helpdesk"],
-                       attributes={"department": "it", "job_title": "Helpdesk Analyst"})
-        fake.seed_user("e4001", ["finance", "payments-initiate"])
-        fake.seed_user("e4002", ["member-services"])
-        fake.seed_user("e4003", ["it", "privileged"])
-    return fake
+    """A fake realm with the groups from roles-map.yaml, the two managers and (with_staff) the
+    movers in their OLD groups and the leavers (still enabled)."""
+    return seeded_fake(roles_map, with_staff=with_staff)
 
 
 def make_plan(fake, feed, accounts, roles_map, today=TODAY):
