@@ -203,3 +203,28 @@ def test_a_pipe_in_csv_text_cannot_break_a_table_row(tmp_path):
     row = next(line for line in table_rows(files["E1001.md"]) if line.startswith("| svc-a"))
     assert "Report \\| export" in row
     assert row.replace("\\|", "").count("|") == 6        # five cells -> six separators
+
+
+def test_leaver_still_enabled_a_day_after_end_date_is_overdue(monkeypatch):
+    """Live-change exercise (class T3-C1): a leaver must be disabled within 24 hours of
+    end_date. One still enabled after that shows as OVERDUE in the manager's attestation."""
+    monkeypatch.setenv("LIFECYCLE_TODAY", "2026-10-22")
+    today = expiry.resolve_today()
+    feed, accounts = load_v2()
+    fake = seeded_fake(ROLES)               # leavers E4001-E4003 are still enabled here
+    state = engine.read_state(fake, feed, accounts)
+    files = attest.build_attestation(feed, accounts, state, "2026-Q4", today)
+
+    def warnings(name):
+        return files[name].split("## Warnings", 1)[1].splitlines()
+
+    # E4001 left 2026-10-16 (6 days ago) and is still enabled: OVERDUE for manager E1001.
+    assert any("E4001" in line and "OVERDUE" in line for line in warnings("E1001.md"))
+    # E4003 left 2026-10-21, exactly one day ago: still inside the 24 hours, not overdue.
+    assert not any("E4003" in line and "OVERDUE" in line for line in warnings("E1002.md"))
+
+    # Once the engine has disabled the leavers, nobody is overdue.
+    engine.apply(make_plan(fake, feed, accounts, ROLES, today), fake)
+    state = engine.read_state(fake, feed, accounts)
+    files = attest.build_attestation(feed, accounts, state, "2026-Q4", today)
+    assert not any("OVERDUE" in line for line in warnings("E1001.md"))
