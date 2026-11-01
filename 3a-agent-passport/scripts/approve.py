@@ -13,6 +13,9 @@ proposal file (DESIGN.md section 6), in this order:
   5. separation-of-duties (SoD) rules from 3H's lifecycle.sod hold            else exit 5
   6. apply with the 3H Keycloak client; a Keycloak error part-way -> "partial", exit 6
 
+Exit 7 means the directory (Keycloak) could not be read BEFORE any change; nothing was changed and
+the proposal stays pending. Exit 6 is only for a failure in the middle of step 6.
+
 Checks 1-5 change nothing. Step 6 audits each group it adds, so a partial apply is visible.
 Known limit: two people approving the same proposal at the same moment are not locked against
 each other (check, then write); fine for a one-person demo.
@@ -23,6 +26,7 @@ Settings: KC_URL, KC_ADMIN_USER, KC_ADMIN_PASSWORD (3H client), AGENT_PASSPORT_*
 import asyncio
 import json
 import os
+import re
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -53,6 +57,7 @@ from server import (
 APPROVE_AUDIENCE = "approve-cli"
 TOOL = "approve.py"
 EXIT_OK, EXIT_NO_TOKEN, EXIT_DENIED, EXIT_BAD_PROPOSAL, EXIT_SOD, EXIT_PARTIAL = 0, 2, 3, 4, 5, 6
+EXIT_DIRECTORY = 7  # directory unreachable before any change (6 means a partial apply)
 
 
 class Stop(Exception):
@@ -60,6 +65,12 @@ class Stop(Exception):
         super().__init__(reason)
         self.code = code
         self.reason = reason
+
+
+def _short(exc: Exception) -> str:
+    """A one-line description for public logs: the error class and HTTP status only, no body."""
+    status = re.search(r"HTTP \d{3}", str(exc))
+    return f"{type(exc).__name__} ({status.group(0)})" if status else type(exc).__name__
 
 
 def _now() -> str:
@@ -84,8 +95,8 @@ def run(proposal_id: str, *, token: str | None, settings: Settings, verifier, kc
         audit.record(tool=TOOL, decision="deny", reason="directory unreachable",
                      args={"proposal_id": proposal_id},
                      client_id=caller["client_id"], subject=caller["subject"])
-        print(f"directory error, nothing changed: {exc}", file=sys.stderr)
-        return EXIT_PARTIAL
+        print(f"directory error, nothing changed: {_short(exc)}", file=sys.stderr)
+        return EXIT_DIRECTORY
 
     return _apply(proposal, path, user, group_ids, current, claims, caller, audit, kc)
 
@@ -153,6 +164,7 @@ def _check_sod(proposal: dict, request: dict, claims: dict, kc, allowed_groups: 
     requester = request["requester"].lower()
     groups = proposal["proposed_groups"]
     # SOD-1: nobody approves their own access.
+    # sod expects a record with the fields requested_by and approved_by; we build a tiny one.
     pair = SimpleNamespace(requested_by=requester, approved_by=approver)
     if sod.requester_equals_approver(pair):
         raise Stop(EXIT_SOD, "SOD-1: approver is the requester")
@@ -161,6 +173,7 @@ def _check_sod(proposal: dict, request: dict, claims: dict, kc, allowed_groups: 
         raise Stop(EXIT_SOD, "a proposed group is not managed by 3H")
 
     user = kc.get_user_by_username(requester)
+    # sod also expects user records with the fields enabled and attributes; same tiny shim.
     users = {requester: SimpleNamespace(enabled=user["enabled"], attributes=user["attributes"])
              } if user else {}
     status = sod.person_status(requester, set(), users)
@@ -191,7 +204,7 @@ def _apply(proposal: dict, path: Path, user: dict, group_ids: dict[str, str], cu
                          args={**base_args, "group": name}, **_who(caller))
             _atomic_write_json(path, {**proposal, "status": "partial", "applied_groups": added,
                                       "failed_at": _now()})
-            print(f"PARTIAL: added {added or 'nothing'}, then Keycloak failed: {exc}",
+            print(f"PARTIAL: added {added or 'nothing'}, then Keycloak failed: {_short(exc)}",
                   file=sys.stderr)
             return EXIT_PARTIAL
         added.append(name)

@@ -31,7 +31,7 @@ TOKEN_URL = f"{KC_URL}/realms/maple-harbour/protocol/openid-connect/token"
 # Scopes Keycloak gives every new client; AC4 ignores them. Listed explicitly so a stray extra
 # scope on the assistant's client (for example an admin scope) fails the test.
 BUILT_IN_SCOPES = {"acr", "address", "basic", "email", "microprofile-jwt", "offline_access",
-                   "organization", "phone", "profile", "roles", "service_account", "web-origins"}
+                   "openid", "organization", "phone", "profile", "roles", "service_account", "web-origins"}
 ASSISTANT_SCOPES = {"requests:read", "requests:propose"}
 
 

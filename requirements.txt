@@ -13,3 +13,5 @@ ruff==0.17.1
 # pyjwt needs the [crypto] extra to verify the RS256 tokens that Keycloak issues.
 mcp==2.3.0
 pyjwt[crypto]==2.15.1
+# httpx2: installed by mcp 2.3.0; pinned because 3A tests use it directly.
+httpx2==2.16.0

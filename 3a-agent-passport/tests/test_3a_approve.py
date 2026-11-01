@@ -1,7 +1,8 @@
 """Unit tests for scripts/approve.py, using 3H's in-memory Keycloak fake (no network).
 
 The rule these tests protect: when approve.py refuses (exit 2-5) the directory and the proposal
-file are exactly as they were; a Keycloak failure part-way is visible as status "partial" (exit 6).
+file are exactly as they were (exit 7 if the directory cannot be read at all); a Keycloak failure
+part-way is visible as status "partial" (exit 6).
 """
 
 import json
@@ -280,7 +281,7 @@ def test_keycloak_error_part_way_marks_the_proposal_partial(env, fake):
         ("allow", "added to group it"), ("deny", "keycloak error while adding helpdesk")]
 
 
-def test_directory_unreachable_before_any_change_exits_6_and_stays_pending(env, fake):
+def test_directory_unreachable_before_any_change_exits_7_and_stays_pending(env, fake):
     proposal_id, path = make_proposal(env)
     before = path.read_text("utf-8")
 
@@ -288,7 +289,7 @@ def test_directory_unreachable_before_any_change_exits_6_and_stays_pending(env, 
         raise KeycloakError("GET /admin/realms/maple-harbour/users -> HTTP 503")
 
     fake.get_user_by_username = broken
-    assert run(env, fake, proposal_id, token_with_kid(env)) == approve.EXIT_PARTIAL
+    assert run(env, fake, proposal_id, token_with_kid(env)) == approve.EXIT_DIRECTORY == 7
     assert_untouched(fake, path, before)
     assert audit_lines(env)[-1]["reason"] == "directory unreachable"
 

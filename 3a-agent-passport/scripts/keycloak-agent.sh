@@ -56,7 +56,7 @@ create_if_missing() {
   local output
   if output="$(kc "$@" 2>&1)"; then
     echo "created: $label"
-  elif grep -qiE "exist|409|conflict" <<<"$output"; then
+  elif grep -qiE "already exists|409|Conflict" <<<"$output"; then
     echo "already exists: $label"
   else
     echo "FAILED: $label" >&2
@@ -104,6 +104,10 @@ create_if_missing "client $AGENT_CLIENT" create clients -r "$REALM" \
   -s clientAuthenticatorType=client-secret -s serviceAccountsEnabled=true \
   -s standardFlowEnabled=false -s directAccessGrantsEnabled=false
 AGENT_ID="$(lookup get clients -r "$REALM" -q clientId="$AGENT_CLIENT" --fields id)"
+if [ -z "$AGENT_ID" ]; then
+  echo "FAILED: client $AGENT_CLIENT not found after creating it" >&2
+  exit 1
+fi
 kc update "clients/$AGENT_ID" -r "$REALM" -s secret="$THROWAWAY"
 echo "set: throwaway secret of client $AGENT_CLIENT"
 for scope in requests:read requests:propose; do
@@ -126,6 +130,10 @@ create_if_missing "client $APPROVE_CLIENT" create clients -r "$REALM" \
   -s clientId="$APPROVE_CLIENT" -s enabled=true -s publicClient=true \
   -s directAccessGrantsEnabled=true -s standardFlowEnabled=false -s serviceAccountsEnabled=false
 APPROVE_ID="$(lookup get clients -r "$REALM" -q clientId="$APPROVE_CLIENT" --fields id)"
+if [ -z "$APPROVE_ID" ]; then
+  echo "FAILED: client $APPROVE_CLIENT not found after creating it" >&2
+  exit 1
+fi
 add_audience_mapper "$APPROVE_ID" approve-cli-audience "$APPROVE_CLIENT"
 
 echo "Done. Agent Passport identities are ready in realm $REALM."

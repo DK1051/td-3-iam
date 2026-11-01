@@ -318,6 +318,12 @@ def build_server(settings: Settings | None = None,
             raise refuse("propose_change", args, token, "unknown request")
         if any(group not in allowed_groups for group in change):
             raise refuse("propose_change", args, token, "group not managed")
+        # The assistant may only propose groups the person actually asked for.
+        # (The name is safe to repeat: it already passed the managed-groups check above.)
+        asked_for = set(request.get("requested_groups", []))
+        extra = next((group for group in change if group not in asked_for), None)
+        if extra is not None:
+            raise refuse("propose_change", args, token, f"group not requested: {extra}")
 
         proposal_id = str(uuid.uuid4())
         proposal = {

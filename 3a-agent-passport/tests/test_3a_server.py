@@ -154,10 +154,27 @@ def test_the_agent_cannot_name_the_requester(env):
     assert run_session(env, mint(env), work) == {"request_id", "change", "justification"}
 
 
+def test_an_extra_requester_argument_cannot_change_the_requester(env):
+    # Tell the tool the proposal is "for" someone else. Either the call is an error, or the
+    # requester written down is still the one from pending.json (REQ-001 -> e3001).
+    arguments = {**PROPOSE[1], "requester": "e2001"}
+    (result,) = call_tools(env, mint(env), [("propose_change", arguments)])
+    files = proposal_files(env)
+    if result.is_error:
+        assert files == []
+    else:
+        (path,) = files
+        assert json.loads(path.read_text("utf-8"))["requester"] == "e3001"
+
+
 @pytest.mark.parametrize("reason, arguments", [
     ("unknown request", {"request_id": "REQ-999", "change": ["finance"], "justification": "x"}),
     ("group not managed", {"request_id": "REQ-001", "change": ["domain-admins"], "justification": "x"}),
     ("group not managed", {"request_id": "REQ-001", "change": ["finance", "root"], "justification": "x"}),
+    ("group not requested: privileged",   # REQ-001 asked only for payments-initiate
+     {"request_id": "REQ-001", "change": ["privileged"], "justification": "x"}),
+    ("group not requested: finance",
+     {"request_id": "REQ-001", "change": ["payments-initiate", "finance"], "justification": "x"}),
     ("invalid change list", {"request_id": "REQ-001", "change": [], "justification": "x"}),
     ("invalid change list", {"request_id": "REQ-001", "change": ["finance"] * 11, "justification": "x"}),
     ("invalid justification", {"request_id": "REQ-001", "change": ["finance"], "justification": "  "}),

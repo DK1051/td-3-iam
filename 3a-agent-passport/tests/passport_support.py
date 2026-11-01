@@ -120,6 +120,7 @@ def result_text(result) -> str:
 
 def load_approve():
     """Import scripts/approve.py (a script, not a package module) by its file path."""
+    # importlib lets us load a Python file from a path we choose, without putting it on sys.path.
     spec = importlib.util.spec_from_file_location("approve_script",
                                                   PASSPORT / "scripts" / "approve.py")
     module = importlib.util.module_from_spec(spec)
