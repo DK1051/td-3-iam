@@ -19,9 +19,11 @@ Claude (models used)
 - T3-S03 director (Opus 5.5): planned the gap fixes, asked Eojin the design choices, started Keycloak, logged caveats, opened the PR.
 - T3-S03 `builder` (Sonnet 5.5): closed the three open gaps (sessions and offline tokens, ownerless/owner-left service accounts, multi-valued attributes), extended the feed, built the proofing gate, the three SoD rules, attestation and expiry, the integration tests and the final 3H README.
 - T3-S03 `redteam` (Fable 5.1): mid-review (11 items + 1 design choice), all handled. `verifier` (Opus 5.5): final check, `docs/verify/T3-S03.md`.
+- T3-C1 director (Opus 5.5): taught the 3H walk-through, ran the demo against the fake Keycloak (real Keycloak not installed), asked and graded the ten interview questions, wrote the exercise test first and typed Eojin's dictated fix. `chores` (Haiku 5.5): `docs/learning/T3-C1.md`. `verifier` (Opus 5.5): `docs/verify/T3-C1.md`.
 
 Eojin
 - Decided: expired service accounts created disabled; leavers disabled at once; joiners disabled until their start date; an explicit `managed_groups` list; service accounts with no active owner fail closed; lost-manager staff go to `unassigned.md`; a malformed row is blocked on its own. Still to do: check each feed row's planned action, write one mover and one leaver row for T3-C1, record the credit balance.
+- T3-C1: answered the ten interview questions himself (5/20, AI-graded); dictated the OVERDUE leaver implementation (commits authored by Eojin; passed on the second attempt, after Claude explained the answer in plain English). Claude added only connecting code, listed in the learning note.
 
 ## 3A Agent Passport
 Claude (models used)
