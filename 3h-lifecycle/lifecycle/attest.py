@@ -61,11 +61,11 @@ def _people_rows(people, state: State, today: date) -> tuple[list[str], list[str
             warnings.append(f"{person.employee_id} has no account in the directory "
                             "(blocked by a control, or not created yet)")
         # Dictated by Eojin in class T3-C1: a leaver whose account is still enabled
-        # one day after the end date.
+        # more than one day after the end date.
         if (isinstance(person, Leaver) and user is not None and user.enabled
-                and today == person.end_date + timedelta(days=1)):
-            warnings.append(f"{person.employee_id}: overdue - left {person.end_date.isoformat()} "
-                            "- one day after expired date. The account is still enabled.")
+                and today > person.end_date + timedelta(days=1)):
+            warnings.append(f"{person.employee_id}: OVERDUE - left {person.end_date.isoformat()} "
+                            "- more than one day after expired date. The account is still enabled.")
     return rows, warnings
 
 
