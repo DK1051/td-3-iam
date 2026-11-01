@@ -5,4 +5,4 @@ One line per session. Read the balance from the usage menu in claude.ai/code **b
 Format: `- <date> <ID> | balance before $ | balance after $ | spent $ | cap $ | note`
 
 - 2026-10-22 T3-S01 | balance before $TODO(Eojin) | balance after $TODO(Eojin) | spent $TODO(Eojin) | cap $5 | ran in one cloud session with the other D0 sessions; see the hub `COSTS.md` for the combined number
-- 2026-11-01 T3-C1 | balance before $TODO(Eojin) | balance after $TODO(Eojin) | spent $TODO(Eojin) | cap $5 | class session, run on D10 (planned D6); demo on the fake Keycloak
+- 2026-11-01 T3-C1 | balance before $TODO(Eojin: not recorded) | balance after $126 | spent $TODO(Eojin) | cap $5 | class session, run on D10 (planned D6); demo on the fake Keycloak
