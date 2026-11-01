@@ -52,7 +52,7 @@ knows one scope list; the per-tool check (step 5) is what stops a read-only toke
   `requester` username, `requested_groups`, `reason`, `channel`).
 - `propose_change(request_id: str, change: list[str], justification: str)` — scope `requests:propose`. `change` is
   the list of groups to **add** to that request's requester (removal is out of scope). The server refuses (tool
-  error, audited) if `request_id` is not in `pending.json`, if any group is not in 3H's `managed_groups`, if `change`
+  error, audited) if `request_id` is not in `pending.json`, if any group is not in 3H's `managed_groups` or was not asked for in that request (added after the mid-review), if `change`
   is empty or over 10 items, or if `justification` is empty or over 2000 characters. The **requester comes from
   `pending.json`, never from the agent**, so the agent cannot redirect access to someone else. (Someone who can edit
   the proposal files directly could; `approve.py` therefore re-checks against `pending.json`, see §6.)
@@ -83,7 +83,8 @@ If any check in steps 1–5 fails, it exits non-zero and changes **nothing**. Ch
    error part-way → the groups already added stay added (and are audited), the proposal is marked `partial`, exit 6.
    So "changes nothing" holds for checks 1–5 only; a partial apply is visible, never silent.
 
-Known limit: two people approving the same proposal at the same moment are not locked against each other (check,
+Known limits: whoever runs `approve.py` also holds the Keycloak admin login that 3H uses (the manager token is the
+gate, not the power); any `manager` can approve any request (there is no "manager of this requester" check); and two people approving the same proposal at the same moment are not locked against each other (check,
 then write). Acceptable for a one-person demo; stated in the README.
 
 ## 7. Audit line
@@ -94,9 +95,10 @@ then write). Acceptable for a one-person demo; stated in the README.
 the **audit log**, because request text may carry injected instructions or personal-looking data (the justification
 is stored in the proposal file, which a manager must read). Tokens are never written.
 Where audit lines come from: each tool call (allow or deny); the verifier for a **presented but invalid** token
-(`tool: "-"`, `decision: deny`, reason = failure class, e.g. `invalid audience`); `approve.py`. Two kinds of request are
-rejected by the SDK middleware before our code runs and are **not audited**: a request with **no token**, and a
-valid token **without `requests:read`** (the `required_scopes` check). A stated limit, not fixed with custom
+(`tool: "-"`, `decision: deny`, reason = failure class, e.g. `invalid audience`); `approve.py`. Three kinds of request are
+rejected by the SDK before our code runs and are **not audited**: a request with **no token**, a valid token
+**without `requests:read`** (the `required_scopes` check), and a tool call whose arguments fail the SDK's schema
+check (found while building). A stated limit, not fixed with custom
 middleware (the brief says to ask first). For AC5, "a tool call" means a call that reaches a tool handler or the
 verifier.
 
@@ -169,3 +171,21 @@ Design review by `redteam` on 2026-11-01, before any code. It saw only this file
 Claims softened as asked: "never written" → "never written to the audit log"; "cannot redirect access" qualified
 (§4); "refused by construction" now rests on the normalisation in item 2; "changes nothing" qualified (§6). Interview
 sentences added: why scope is checked twice (§3) and why the requester comes from `pending.json` (§4).
+
+### Mid-review (code, after steps 3–5)
+
+`redteam` reviewed the diff of steps 3–5 on 2026-11-01. Verdict: continue after fixing items 1–4.
+
+| # | Rank | Issue | What was done |
+|---|---|---|---|
+| 1 | fix now | Tests import `httpx2`, said to be "not a real package" | Checked: it is real and is mcp 2.3.0's own HTTP library (installed as its dependency). The fair part was the missing pin: pinned `httpx2==2.16.0` in `requirements.txt` |
+| 2 | fix now | `approve.py` exited 6 ("partial") when Keycloak was unreachable before any change | new exit code 7 for "directory unreachable, nothing changed" |
+| 3 | fix now | `keycloak-agent.sh` treated "does not exist" as "already exists"; empty client id not guarded | grep narrowed; empty-id guard added |
+| 4 | fix now | Server accepted proposals for groups the request never asked for | server denies with `group not requested`; §4 updated |
+| 5 | later | `.gitignore` excludes `audit.jsonl` / `proposals/*.json` but AC10 mentions a committed sample | no sample committed: no real run happened this session (recorded in CAVEATS) |
+| 6 | later | Schema-invalid arguments are a third unaudited path | §7 updated; README limits |
+| 7 | later | Runner of `approve.py` holds Keycloak admin; any manager can approve anyone | §6 known limits; README limits |
+| 8 | later | `openid` missing from the built-in scopes ignore list | added |
+| 9 | later | `SimpleNamespace` shims and `importlib` loader hard to explain | plain-English comments added |
+| 10 | later | Agent-cannot-name-requester test only inspected the schema | runtime test added |
+| 11 | later | Keycloak error text printed to stderr | trimmed to a short status line |
