@@ -6,4 +6,4 @@ Format: `- <date> <ID> | balance before $ | balance after $ | spent $ | cap $ | 
 
 - 2026-10-22 T3-S01 | balance before $TODO(Eojin) | balance after $TODO(Eojin) | spent $TODO(Eojin) | cap $5 | ran in one cloud session with the other D0 sessions; see the hub `COSTS.md` for the combined number
 - 2026-11-01 T3-C1 | balance before $TODO(Eojin: not recorded) | balance after $126 | spent $TODO(Eojin) | cap $5 | class session, run on D10 (planned D6); demo on the fake Keycloak
-- 2026-11-01 T3-S04 (framework only) | balance before $TODO(Eojin) | balance after $TODO(Eojin) | spent $TODO(Eojin) | cap $12 (scoped; brief cap $18 includes the deferred eval) | no model evaluation ran, so no per-model cost lines yet; those come from the real run
+- 2026-11-01 T3-S04 (framework only) | balance before $TODO(Eojin: not recorded) | balance after $94 | spent $TODO(Eojin: unknown, the before reading was not taken) | cap $12 (scoped; brief cap $18 includes the deferred eval) | no model evaluation ran, so no per-model cost lines yet; those come from the real run

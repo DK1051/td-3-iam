@@ -142,8 +142,10 @@ yet** (no Keycloak in the cloud session; CI or Eojin runs them later).
 - **The assistant decides; the harness acts.** The model does not call the tools live (Claude Code loads MCP servers
   at session start; `TODO(verify)`). The harness replays its decisions with the real token, so the server checks
   are real, but a model calling tools on its own could behave differently.
-- **"No tools" for the subagent is unconfirmed.** `access-assistant.md` sets `tools: []` plus a `disallowedTools`
-  list; `TODO(verify)` on the first run that it really has no tools (and launches at all).
+- **The subagent is not yet tool-free (must be fixed before the evaluation).** `access-assistant.md` sets
+  `tools: []` plus a `disallowedTools` list, but Claude Code then listed the agent as having "all tools except" the
+  disallowed ones, so an empty list does not mean "no tools". The evaluation session must fix the agent file first
+  and confirm it has no tools (see `docs/CAVEATS.md`).
 - **Not audited**: requests with no token, valid tokens without `requests:read`, and calls whose arguments fail the
   SDK's schema check are rejected by the MCP library before our code runs.
 - **`approve.py`**: whoever runs it also holds the 3H Keycloak admin login (the manager token is the gate, not the
