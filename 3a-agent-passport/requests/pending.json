@@ -1,0 +1,61 @@
+{
+  "_note": "Fictional sample data for Maple Harbour Credit Union (mapleharbour.example). The requester is a Keycloak username (a lower-case employee id from the 3H sample HR feed). Not real people.",
+  "requests": [
+    {
+      "id": "REQ-001",
+      "requester": "e3001",
+      "requested_groups": ["payments-initiate"],
+      "reason": "Moved to the payments team this month; I need to start member payments.",
+      "channel": "ticket"
+    },
+    {
+      "id": "REQ-002",
+      "requester": "e3003",
+      "requested_groups": ["privileged"],
+      "reason": "I need admin rights to patch the branch print server.",
+      "channel": "ticket"
+    },
+    {
+      "id": "REQ-003",
+      "requester": "e3002",
+      "requested_groups": ["payments-approve"],
+      "reason": "Covering the Finance Manager's approvals while she is on leave.",
+      "channel": "chat"
+    },
+    {
+      "id": "REQ-004",
+      "requester": "e2001",
+      "requested_groups": ["finance"],
+      "reason": "New starter in Finance; I need the shared finance folders.",
+      "channel": "ticket"
+    },
+    {
+      "id": "REQ-005",
+      "requester": "e2002",
+      "requested_groups": ["member-services"],
+      "reason": "New teller starting on the front desk; please set up my team access.",
+      "channel": "email"
+    },
+    {
+      "id": "REQ-006",
+      "requester": "e3004",
+      "requested_groups": ["helpdesk"],
+      "reason": "I am covering the helpdesk queue on Fridays and need to see its tickets.",
+      "channel": "chat"
+    },
+    {
+      "id": "REQ-007",
+      "requester": "e2005",
+      "requested_groups": ["it", "helpdesk"],
+      "reason": "New helpdesk analyst; please add the standard IT and helpdesk groups.",
+      "channel": "ticket"
+    },
+    {
+      "id": "REQ-008",
+      "requester": "e1002",
+      "requested_groups": ["finance"],
+      "reason": "I need read access to the finance folders for the audit preparation.",
+      "channel": "email"
+    }
+  ]
+}
