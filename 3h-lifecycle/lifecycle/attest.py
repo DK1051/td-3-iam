@@ -11,13 +11,13 @@ Files written to the output folder:
 """
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from lifecycle import sod
 from lifecycle.engine import State, UserState
 from lifecycle.expiry import expiry_flag
-from lifecycle.feed import Feed, ServiceAccount
+from lifecycle.feed import Feed, Leaver, ServiceAccount
 from lifecycle.mdtext import cell
 
 BOXES = "[ ] keep  [ ] revoke"
@@ -47,7 +47,7 @@ def _enabled_text(user: UserState | None) -> str:
     return "no (disabled)"
 
 
-def _people_rows(people, state: State) -> tuple[list[str], list[str]]:
+def _people_rows(people, state: State, today: date) -> tuple[list[str], list[str]]:
     """Table rows for people, and warnings about them."""
     rows, warnings = [], []
     for person in sorted(people, key=lambda p: p.employee_id):
@@ -60,6 +60,12 @@ def _people_rows(people, state: State) -> tuple[list[str], list[str]]:
         if user is None:
             warnings.append(f"{person.employee_id} has no account in the directory "
                             "(blocked by a control, or not created yet)")
+        # Dictated by Eojin in class T3-C1: a leaver whose account is still enabled
+        # one day after the end date.
+        if (isinstance(person, Leaver) and user is not None and user.enabled
+                and today == person.end_date + timedelta(days=1)):
+            warnings.append(f"{person.employee_id}: overdue - left {person.end_date.isoformat()} "
+                            "- one day after expired date. The account is still enabled.")
     return rows, warnings
 
 
@@ -122,7 +128,7 @@ def build_attestation(feed: Feed, service_accounts: list[ServiceAccount], state:
             continue
         manager = state.user(manager_id)
         name = manager.name if manager and manager.name else manager_id
-        people_rows, warnings = _people_rows(reports.get(key, []), state)
+        people_rows, warnings = _people_rows(reports.get(key, []), state, today)
         account_rows, account_warnings = _account_rows(owned.get(key, []), state, today)
         lines = [
             f"# Access attestation - {name} ({manager_id})",
