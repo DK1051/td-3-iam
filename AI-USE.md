@@ -27,7 +27,7 @@ Eojin
 
 ## 3A Agent Passport
 Claude (models used)
-- (to be filled at wrap)
+- T3-S04 (framework only): the director (Opus) wrote `DESIGN.md` and the README and integrated the work; `redteam` (Fable) reviewed the design before any code and the code mid-build (it saw only the design, brief, CLAUDE.md and the diff, never request text); `builder` (Sonnet) wrote the server, verifier, audit, `approve.py`, the Keycloak script, the `access-assistant` subagent, the harness and all tests, and applied the mid-review fixes; `verifier` (Opus) ran the regression and acceptance checks (`docs/verify/T3-S04.md`). No model evaluation ran.
 
 Eojin
-- (to be filled at wrap)
+- T3-S04: approved the scoped build (framework now, evaluation after his A+ exam). Still to do: write the 30 malicious requests in `cases/`, run the evaluation and the approvals, record the cost numbers.

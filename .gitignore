@@ -21,3 +21,7 @@ keycloak-*/
 # Track 3 only: read-only tenant exports from scripts/export-config.ps1 contain
 # tenant and object IDs. They stay on Eojin's PC.
 3e-anti-takeover-tenant/export/
+
+# Track 3A Agent Passport: runtime output, not committed (see 3a-agent-passport/README.md)
+3a-agent-passport/audit.jsonl
+3a-agent-passport/proposals/*.json

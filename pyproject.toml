@@ -1,8 +1,8 @@
-# Repo-wide settings for pytest and ruff. The code lives in 3h-lifecycle/ (and 3a-agent-passport/
-# later); test file names must be unique across the repo, so each is prefixed with its project.
+# Repo-wide settings for pytest and ruff. The code lives in 3h-lifecycle/ and 3a-agent-passport/;
+# test file names must be unique across the repo, so each is prefixed with its project.
 [tool.pytest.ini_options]
-testpaths = ["3h-lifecycle/tests"]
-pythonpath = ["3h-lifecycle"]
+testpaths = ["3h-lifecycle/tests", "3a-agent-passport/tests"]
+pythonpath = ["3h-lifecycle", "3a-agent-passport"]
 # A roles-map note about the payments-ops demo pair is expected; tests that check it use
 # pytest.warns, which still sees it.
 filterwarnings = ["ignore::lifecycle.engine.RolesMapWarning"]
@@ -14,4 +14,4 @@ markers = [
 target-version = "py312"
 line-length = 100
 # Where first-party code lives, so ruff sorts "import lifecycle" separately from libraries.
-src = ["3h-lifecycle"]
+src = ["3h-lifecycle", "3a-agent-passport"]
