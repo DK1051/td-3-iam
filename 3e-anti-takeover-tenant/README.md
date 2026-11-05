@@ -1,6 +1,6 @@
 # 3E Anti-Takeover Tenant
 
-Part of the [td-3-iam](../README.md) track of the Takeover Defense portfolio. Status: **scaffolded, Eojin is configuring the tenant.**
+Part of the [td-3-iam](../README.md) track of the Takeover Defense portfolio. Status: **In progress** (scaffold built; Eojin is configuring the tenant).
 
 ## What it does
 
@@ -8,7 +8,7 @@ Attackers phone an IT helpdesk, pretend to be an employee and talk the agent int
 
 It sets up a trial Microsoft 365 / Microsoft Entra tenant (one organisation's own copy of Microsoft's identity service) for the fictional Maple Harbour Credit Union (`mapleharbour.example`) and aims to turn on eight controls: phishing-resistant sign-in with passkeys, authentication strengths for admins, three Conditional Access rules (block legacy sign-in, strong sign-in for admins, strong re-check on a new device), Temporary Access Pass issued only after a call-back, self-service password reset with strong methods, and two emergency break-glass accounts. `controls.md` lists each control, what it stops, the licence it needs, and the Canadian guidance it is aligned to (OSFI B-13 section 3.2.7, Cyber Centre baseline controls, AL26-010). "Aligned to" only means the control was chosen to serve the same goal; it is not a claim of meeting any standard.
 
-The evidence is a before/after report with screenshots, plus a read-only script that exports the tenant's configuration.
+The planned evidence is a before/after report with screenshots (none taken yet), plus a read-only script that exports the tenant's configuration.
 
 ## How to run it
 
