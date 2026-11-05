@@ -227,7 +227,7 @@ Eojin's still to do: act as one manager with an attestation file, write down in 
 prevents at a credit union, and write two feed rows (one mover, one leaver) for the class.
 
 Claude wrote the engine, the Keycloak client, the HR file reader, the controls, the
-attestation, the dev setup script, the sample data, the tests and this document. The sample data is entirely
+attestation (except its OVERDUE leaver check, which Eojin dictated in class T3-C1), the dev setup script, the sample data, the tests and this document. The sample data is entirely
 fictional. A second AI reviewer read the code partway through in both sessions and its findings were handled (see
 `docs/verify/`).
 
