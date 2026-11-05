@@ -1,6 +1,6 @@
 # 3A Agent Passport
 
-**Status: framework and server complete (T3-S04). The real evaluation is pending Eojin's 30 malicious requests,
+**Status: Cut (framework and server built in T3-S04). The real evaluation, moved past Nov 5, 2026, is pending Eojin's 30 malicious requests,
 scheduled after his CompTIA A+ exam, on plan usage. No results yet: there is no `runs/results.md` and no score in
 this README until that run happens.**
 

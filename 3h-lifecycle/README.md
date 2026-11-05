@@ -226,7 +226,7 @@ Eojin decided:
 Eojin's still to do: act as one manager with an attestation file, write down in his own words what each SoD rule
 prevents at a credit union, and write two feed rows (one mover, one leaver) for the class.
 
-Claude (with Eojin's review) wrote the engine, the Keycloak client, the HR file reader, the controls, the
+Claude wrote the engine, the Keycloak client, the HR file reader, the controls, the
 attestation, the dev setup script, the sample data, the tests and this document. The sample data is entirely
 fictional. A second AI reviewer read the code partway through in both sessions and its findings were handled (see
 `docs/verify/`).
