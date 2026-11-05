@@ -2,7 +2,8 @@
 # Job `checks` is the one the branch ruleset requires (exact name). Job `pwsh-lint` is a
 # Track 3 extra: PSScriptAnalyzer can only run here, because PowerShell Gallery is blocked
 # in the cloud sessions. No secrets are used anywhere in this file; GITHUB_TOKEN is the
-# automatic read-only token GitHub gives every workflow run.
+# automatic per-run token GitHub gives every workflow run. It is read-only, except that
+# job `checks` may also write pull-request comments (gitleaks).
 name: CI
 
 on:
@@ -11,22 +12,26 @@ on:
   pull_request:
     branches: [main]
 
-# gitleaks reads the pull request's commits and comments on a leak
+# Read-only by default. Only job `checks` gets pull-requests: write (see below).
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # gitleaks reads the pull request's commits and comments on a leak
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Check out (full history, so the secret scan sees every commit)
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -46,7 +51,7 @@ jobs:
         run: pytest -q || [ $? -eq 5 ]
 
       - name: Secret scan with gitleaks
-        uses: gitleaks/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -54,7 +59,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Lint every PowerShell script with PSScriptAnalyzer
         shell: pwsh
